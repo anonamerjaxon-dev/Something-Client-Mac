@@ -1,0 +1,26 @@
+<h2>What type of module is this?</h2>
+<p class="subtitle">How do you want to use and distribute this cursor trail?</p>
+
+<div class="options">
+  <div class="option" data-choice="app" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Standalone App</h3>
+      <p>A .app you run in the background. Starts at login, draws trail on screen. <strong>Recommended.</strong></p>
+    </div>
+  </div>
+  <div class="option" data-choice="library" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Swift Package / Library</h3>
+      <p>Import into other apps. Developers add cursor trail to their own macOS apps.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="both" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Both</h3>
+      <p>A standalone app that also exposes a library API for other developers to use.</p>
+    </div>
+  </div>
+</div>

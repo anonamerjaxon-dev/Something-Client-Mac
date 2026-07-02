@@ -1,0 +1,26 @@
+<h2>What performance level do you need?</h2>
+<p class="subtitle">This affects how the trail is rendered and how much system resources it uses.</p>
+
+<div class="options">
+  <div class="option" data-choice="minimal" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Minimal Footprint</h3>
+      <p>Low CPU/GPU usage. Simple drawing, fewer particles. Good for older Macs or when running heavy apps. <strong>Recommended for a first version.</strong></p>
+    </div>
+  </div>
+  <div class="option" data-choice="balanced" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Balanced</h3>
+      <p>Decent effects with reasonable resource usage. Some glow, some particles, but capped.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="max" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Maximum Quality</h3>
+      <p>Full GPU-accelerated rendering, lots of particles, blur effects, 60fps. Higher battery usage.</p>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,27 @@
+# macOS system files
+.DS_Store
+Thumbs.db
+
+# Xcode / Swift build files
+.build/
+.build-local/
+.build-release/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+
+# Compiled binaries
+*.app
+*.dSYM
+*.o
+*.swiftmodule
+
+# Your specific local folders (keep these off GitHub)
+docs/
+2nd try/
+CursorTrail.app/
+
+# Package manager
+.swiftpm/
+Package.resolved

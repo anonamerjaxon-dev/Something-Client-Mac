@@ -1,0 +1,33 @@
+<h2>How should the trail appear on screen?</h2>
+<p class="subtitle">This determines how the trail is rendered on the macOS desktop. Different approaches have different trade-offs.</p>
+
+<div class="options">
+  <div class="option" data-choice="overlay" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Transparent Overlay Window</h3>
+      <p>A borderless, transparent window that floats above everything. The trail is drawn on this window. Works across all apps. <strong>Recommended.</strong></p>
+    </div>
+  </div>
+  <div class="option" data-choice="cursor-replace" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Replace System Cursor</h3>
+      <p>Hide the real cursor and draw a custom cursor + trail. More complex but feels native. Requires accessibility permissions.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="specific-window" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Attach to Specific Window</h3>
+      <p>Trail only appears over a specific app window (like a game or presentation). Good for targeted use cases.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="screen-record" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Screen Recording Overlay</h3>
+      <p>Draw the trail as part of a screen recording/stream overlay. Useful for content creators.</p>
+    </div>
+  </div>
+</div>

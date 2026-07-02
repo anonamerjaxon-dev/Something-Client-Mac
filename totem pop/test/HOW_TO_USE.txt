@@ -1,0 +1,72 @@
+========================================
+  HOW TO USE THE MOTION SENSOR APP
+========================================
+
+WHAT IT DOES
+------------
+Reads the Bosch BMI286 IMU (accelerometer) chip that's built into
+Apple Silicon Macs. Shows live X, Y, Z acceleration values and the
+total magnitude, updating ~20 times per second.
+
+HARDWARE REQUIREMENTS
+---------------------
+- Apple Silicon Mac: M2, M3, M4 (any) or M1 Pro
+- Will NOT work on: base M1, M1 Air, M1 Max/Ultra, Intel Macs
+
+HOW TO RUN
+----------
+Open Terminal and run:
+
+    sudo /Users/jackson/Desktop/test/build/MotionSensor
+
+You MUST use sudo — the app needs root access to talk to the
+accelerometer chip.
+
+If you want to rebuild from source first:
+
+    cd /Users/jackson/Desktop/test
+    ./build.sh
+    sudo ./build/MotionSensor
+
+WHAT YOU'LL SEE
+---------------
+- Green dot  = connected, showing live data
+- Red dot    = no sensor found (wrong Mac or not using sudo)
+- X/Y/Z values in g-force units
+- Magnitude (‖a‖) = total acceleration
+- Tilt your Mac and the values change
+
+HOW THE SENSOR WORKS
+--------------------
+Your Mac has a tiny motion chip (Bosch BMI286) connected over HID
+(Human Interface Device bus). This app:
+
+1. Wakes up the sensor driver
+2. Opens the HID device (needs sudo)
+3. Listens for 22-byte data reports from the chip
+4. Extracts 3 numbers (X, Y, Z) from each report
+5. Displays them live
+
+This is the SAME technique used by the "spank" app on GitHub
+(github.com/taigrr/spank) — just without the sound effects.
+
+TROUBLESHOOTING
+---------------
+"No accelerometer found" with red dot?
+  → You're on a Mac without the BMI286 chip (needs M2+ or M1 Pro)
+
+App crashes or won't start?
+  → Make sure you're using sudo
+
+Values stay at zero?
+  → The sensor driver may need a moment to wake up
+
+VALUES SEEM WRONG?
+------------------
+Raw sensor output. At rest your Mac should show roughly:
+  X ≈ 0.0 g
+  Y ≈ 0.0 g
+  Z ≈ -1.0 g    (gravity pulling down)
+  Magnitude ≈ 1.0 g
+
+Pick up or tilt the Mac and the values will change.

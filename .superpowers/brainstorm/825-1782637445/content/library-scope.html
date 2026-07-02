@@ -1,0 +1,26 @@
+<h2>How should the system-wide library work?</h2>
+<p class="subtitle">A library that any app can import to add cursor trail functionality.</p>
+
+<div class="options">
+  <div class="option" data-choice="swift-package" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Swift Package</h3>
+      <p>Distributed via SPM (Swift Package Manager). Any app adds it as a dependency. <strong>Recommended.</strong></p>
+    </div>
+  </div>
+  <div class="option" data-choice="framework" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Framework Bundle</h3>
+      <p>A .framework bundle that gets embedded in any app. More manual but very portable.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="xcframework" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>XCFramework</h3>
+      <p>Apple's modern binary framework format. Works on macOS, iOS, and simulators. Best compatibility.</p>
+    </div>
+  </div>
+</div>
