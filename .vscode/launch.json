@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/cursor trail",
+            "name": "Debug TestRunner (cursor trail)",
+            "target": "TestRunner",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug TestRunner (cursor trail)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/cursor trail",
+            "name": "Release TestRunner (cursor trail)",
+            "target": "TestRunner",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release TestRunner (cursor trail)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/cursor trail",
+            "name": "Debug CursorTrailDemo (cursor trail)",
+            "target": "CursorTrailDemo",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug CursorTrailDemo (cursor trail)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/cursor trail",
+            "name": "Release CursorTrailDemo (cursor trail)",
+            "target": "CursorTrailDemo",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release CursorTrailDemo (cursor trail)"
+        }
+    ]
+}

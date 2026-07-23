@@ -1,6 +1,7 @@
 import Foundation
 import QuartzCore
 import AppKit
+import CoreVideo
 
 /// Main entry point for the CursorTrail library.
 ///
@@ -26,7 +27,8 @@ public final class CursorTrail {
     private var lastMouseLocation: CGPoint = .zero
     private var lastTimestamp: CFTimeInterval = 0
     private var isRunning: Bool = false
-    private var updateTimer: Timer?
+    private var displayLink: CVDisplayLink?
+    private var displayLinkUserInfo: UnsafeMutableRawPointer?
     private var fadeAccumulator: Double = 0
     private var screenHeight: CGFloat = 0
 
@@ -68,7 +70,7 @@ public final class CursorTrail {
 
     @discardableResult
     public func rainbowSpeed(_ speed: Double) -> CursorTrail {
-        configuration.rainbowSpeed = speed
+        configuration.rainbowSpeed = max(speed, 0.1)
         return self
     }
 
@@ -99,12 +101,6 @@ public final class CursorTrail {
     @discardableResult
     public func glow(_ config: GlowConfig) -> CursorTrail {
         configuration.glow = config
-        return self
-    }
-
-    @discardableResult
-    public func particles(_ config: ParticleConfig) -> CursorTrail {
-        configuration.particles = config
         return self
     }
 
@@ -144,21 +140,36 @@ public final class CursorTrail {
         CursorTrail.current = nil
     }
 
-    // MARK: - Update Timer (60fps)
+    // MARK: - Display Link (vsync-synced)
 
     private func startUpdateTimer() {
-        updateTimer?.invalidate()
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            self?.updateTrail()
+        stopUpdateTimer()
+
+        let callback: CVDisplayLinkOutputCallback = { (displayLink, _, _, _, _, userInfo) -> CVReturn in
+            let trail = Unmanaged<CursorTrail>.fromOpaque(userInfo!).takeUnretainedValue()
+            DispatchQueue.main.async { [weak trail] in
+                trail?.updateTrail()
+            }
+            return kCVReturnSuccess
         }
-        if let timer = updateTimer {
-            RunLoop.current.add(timer, forMode: .common)
-        }
+
+        CVDisplayLinkCreateWithActiveCGDisplays(&displayLink)
+        guard let link = displayLink else { return }
+
+        let unmanaged = Unmanaged.passRetained(self)
+        displayLinkUserInfo = unmanaged.toOpaque()
+        CVDisplayLinkSetOutputCallback(link, callback, displayLinkUserInfo!)
+        CVDisplayLinkStart(link)
     }
 
     private func stopUpdateTimer() {
-        updateTimer?.invalidate()
-        updateTimer = nil
+        guard let link = displayLink else { return }
+        CVDisplayLinkStop(link)
+        displayLink = nil
+        if let opaque = displayLinkUserInfo {
+            Unmanaged<CursorTrail>.fromOpaque(opaque).release()
+            displayLinkUserInfo = nil
+        }
     }
 
     private func updateTrail() {

@@ -1,6 +1,10 @@
 # CursorTrail
 
-A Swift library that draws a smooth, animated trail behind the mouse cursor on macOS. The trail renders on a transparent overlay window at `.screenSaver` window level, floating above all content and passing clicks through.
+A lightweight Swift library that draws a smooth, animated trail behind the mouse cursor on macOS. Renders on a transparent overlay window at `.screenSaver` level — floating above all content while passing clicks through.
+
+<p align="center">
+  <img src="demo.gif" alt="CursorTrail demo" width="600"/>
+</p>
 
 ## Requirements
 
@@ -12,7 +16,7 @@ A Swift library that draws a smooth, animated trail behind the mouse cursor on m
 ```swift
 import CursorTrail
 
-// Start with all defaults
+// Start with defaults (rainbow ribbon)
 CursorTrail().start()
 
 // Stop it
@@ -21,7 +25,7 @@ CursorTrail.current?.stop()
 
 ## Configuration
 
-Use the builder pattern to customize before calling `.start()`:
+Use the builder pattern — chain config calls, then `.start()`:
 
 ```swift
 CursorTrail()
@@ -34,27 +38,25 @@ CursorTrail()
     .diminishing(true)
     .diminishingIntensity(0.7)
     .opacity(0.8)
-    .speed(.adaptive)
     .glow(GlowConfig(radius: 8, intensity: 0.5))
     .start()
 ```
 
 ## Defaults
 
-| Parameter | Default | Value |
+| Parameter | Default | Description |
 |---|---|---|
 | `color` | `.rainbow` | Cycling HSL spectrum |
 | `style` | `.ribbon` | Filled Catmull-Rom spline |
-| `thickness` | `12` | Points |
-| `length` | `10` | Buffer capacity (min enforced: 10) |
-| `fadeSpeed` | `1.0` | Points removed per frame when mouse stops |
-| `rainbowSpeed` | `5.0` | Multiplier for color cycling |
-| `diminishing` | `true` | Tail tapers toward cursor head |
-| `diminishingIntensity` | `0.7` | 0.0 = uniform width, 1.0 = maximum taper |
-| `opacity` | `0.8` | Overall trail transparency (0.0-1.0) |
+| `thickness` | `12` | Trail width in points |
+| `length` | `10` | Max trail points in buffer |
+| `fadeSpeed` | `1.0` | Points removed per frame when idle |
+| `rainbowSpeed` | `5.0` | Multiplier for hue cycle speed |
+| `diminishing` | `true` | Tail tapers thinner toward the head |
+| `diminishingIntensity` | `0.7` | 0 = uniform, 1 = max taper |
+| `opacity` | `0.8` | Overall transparency (0.0–1.0) |
 | `speed` | `.adaptive` | Width scales with mouse velocity |
-| `glow` | `nil` | No glow by default |
-| `particles` | `nil` | No particles by default |
+| `glow` | `nil` | Optional glow behind the trail |
 
 ## API Reference
 
@@ -62,9 +64,9 @@ CursorTrail()
 
 ```swift
 public enum TrailColor {
-    case solid(Color)       // Single color, e.g. .solid(.cyan)
-    case gradient(Color, Color) // Two-color blend, e.g. .gradient(.red, .blue)
-    case rainbow            // HSL hue cycling
+    case solid(Color)              // e.g. .solid(.cyan)
+    case gradient(Color, Color)    // e.g. .gradient(.red, .blue)
+    case rainbow                   // HSL hue cycling
 }
 ```
 
@@ -72,8 +74,8 @@ public enum TrailColor {
 
 ```swift
 public enum TrailStyle {
-    case line    // Multi-pass stroked polyline (4 passes for depth)
-    case ribbon  // Filled spline with perpendicular normals
+    case line     // Multi-pass stroked polyline (4 passes for depth)
+    case ribbon   // Filled Catmull-Rom spline with perpendicular normals
 }
 ```
 
@@ -81,7 +83,7 @@ public enum TrailStyle {
 
 ```swift
 public enum SpeedMode {
-    case fixed     // Constant width regardless of movement
+    case fixed     // Constant width regardless of speed
     case adaptive  // Width scales with mouse velocity
 }
 ```
@@ -90,35 +92,15 @@ public enum SpeedMode {
 
 ```swift
 GlowConfig(radius: 8, intensity: 0.5, color: nil)
-// radius: blur spread in points
+// radius:    blur spread in points
 // intensity: 0.0 (invisible) to 1.0 (full)
-// color: nil uses the trail's current color
+// color:     nil uses the trail's current color, or specify a custom one
 ```
-
-### `ParticleConfig`
-
-```swift
-ParticleConfig(count: 5, size: 4, color: .white)
-// count: number of particles placed along the trail
-// size: diameter in points
-// color: particle fill color
-```
-
-## What Not To Do
-
-- **Don't call `.start()` multiple times.** Each call creates a new overlay window. Call `.stop()` first or check `CursorTrail.current`.
-- **Don't reuse the same `CursorTrail` builder instance.** The builder pattern creates a snapshot of configuration at `.start()` time. Chain `.start()` immediately after your config calls.
-- **Don't set `length` below 10.** The minimum is enforced, but the trail will look choppy with fewer than ~20 points.
-- **Don't set `opacity` to 0.** The trail won't be visible. This is a common mistake when the slider defaults are misread — opacity is 0.0-1.0, not percentage.
-- **Don't expect multi-monitor support.** The trail covers only the main display.
-- **Don't expect it to work in full-screen games.** Apps using `CGDisplayCapture` (games, video players) block all external overlay drawing.
-- **Don't set `diminishingIntensity` above 1.0 or below 0.0.** Values are clamped, but extreme values produce a flat or nearly invisible tail.
-- **Don't mix `.solid` color with `.rainbowSpeed`.** Rainbow speed only has an effect when `color` is `.rainbow`. Setting it on a solid color is dead work.
-- **Don't forget to call `.stop()` in app cleanup.** The deinit handles it, but if you hold a strong reference to the builder, the overlay stays alive.
 
 ## Recommended Presets
 
 ### Subtle
+
 ```swift
 CursorTrail()
     .color(.solid(.gray))
@@ -132,6 +114,7 @@ CursorTrail()
 ```
 
 ### Bold
+
 ```swift
 CursorTrail()
     .color(.gradient(.cyan, .magenta))
@@ -145,6 +128,7 @@ CursorTrail()
 ```
 
 ### Minimal
+
 ```swift
 CursorTrail()
     .color(.solid(.white))
@@ -161,26 +145,34 @@ CursorTrail()
 
 | Component | Role |
 |---|---|
-| `CursorTrail` | Main class, builder pattern, 60 Hz Timer loop |
-| `TrailWindow` | Transparent `NSWindow` at `.screenSaver` level |
-| `TrailModel` | `ObservableObject` holding `@Published trailPoints` |
-| `TrailContentView` | SwiftUI `Canvas` view that renders via `TrailRenderer` |
-| `TrailRenderer` | Draws line/ribbon/glow/particles onto `GraphicsContext` |
+| `CursorTrail` | Main class — builder API, CVDisplayLink render loop, mouse tracking |
+| `TrailConfiguration` | All tunable parameters in one `Sendable` struct |
+| `TrailWindow` | Transparent `NSWindow` at `.screenSaver` level, ignores mouse events |
+| `TrailModel` | `ObservableObject` holding `@Published` trail points |
+| `TrailContentView` | SwiftUI `Canvas` view that delegates to `TrailRenderer` |
+| `TrailRenderer` | Draws line/ribbon/glow into `GraphicsContext` |
 | `RingBuffer` | Fixed-capacity circular buffer for O(1) point storage |
-| `TrailPoint` | Position, timestamp, velocity |
+| `TrailPoint` | Data model: position, timestamp, velocity |
 
-The window uses `.ignoresMouseEvents = true` so clicks pass through to content below. `.canJoinAllSpaces` ensures visibility across all Desktops/Spaces.
+The window uses `.ignoresMouseEvents = true` so clicks pass through. `.canJoinAllSpaces` + `.fullScreenAuxiliary` ensures visibility across all Spaces and full-screen apps. Rendering is synced to the display refresh rate via `CVDisplayLink`.
 
 ## Demo App
 
-The included SwiftUI demo (`CursorTrailDemo`) provides live controls for all parameters:
+The included demo (`CursorTrailDemo`) provides a polished UI for live-tuning all parameters:
 
 ```bash
-swift build
-open CursorTrail.app
-# or
 swift run CursorTrailDemo
 ```
+
+## Important Notes
+
+- **Don't call `.start()` multiple times** without stopping first — each call creates a new overlay window.
+- **Don't reuse the builder** after `.start()`. The builder pattern snapshots configuration at start time.
+- **Don't set `opacity` to 0** — the trail won't be visible. Opacity is 0.0–1.0, not a percentage.
+- **Don't expect multi-monitor support** — the trail covers only the main display.
+- **Don't expect it to work in full-screen games** — apps using `CGDisplayCapture` block overlay drawing.
+- **Don't mix `.solid` color with `.rainbowSpeed`** — rainbow speed only affects `.rainbow` color mode.
+- **Always call `.stop()`** if you hold a strong reference, though `deinit` handles cleanup.
 
 ## License
 

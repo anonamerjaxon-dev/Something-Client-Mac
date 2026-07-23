@@ -27,10 +27,6 @@ public final class TrailRenderer {
             if let glow = configuration.glow {
                 drawGlow(context: context, points: points, glow: glow, now: now, opacity: opacity)
             }
-
-            if let particles = configuration.particles {
-                drawParticles(context: context, points: points, particles: particles, opacity: opacity)
-            }
         }
     }
 
@@ -73,6 +69,7 @@ public final class TrailRenderer {
         let samplesPerSegment = 8
         let totalSamples = (count - 1) * samplesPerSegment + 1
         var smoothPoints: [CGPoint] = []
+        smoothPoints.reserveCapacity(totalSamples)
         for i in 0..<totalSamples {
             let t = CGFloat(i) / CGFloat(samplesPerSegment)
             let idx = Int(t)
@@ -88,6 +85,8 @@ public final class TrailRenderer {
         let smoothCount = smoothPoints.count
         var leftSide: [CGPoint] = []
         var rightSide: [CGPoint] = []
+        leftSide.reserveCapacity(smoothCount)
+        rightSide.reserveCapacity(smoothCount)
 
         for i in 0..<smoothCount {
             let t = CGFloat(i) / CGFloat(max(smoothCount - 1, 1))
@@ -142,22 +141,6 @@ public final class TrailRenderer {
             with: .color(glowColor),
             style: StrokeStyle(lineWidth: configuration.thickness + glow.radius, lineCap: .round, lineJoin: .round)
         )
-    }
-
-    // MARK: - Particles
-
-    private func drawParticles(context: GraphicsContext, points: RingBuffer<TrailPoint>, particles: ParticleConfig, opacity: Double) {
-        let strideBy = max(1, points.count / particles.count)
-        for i in Swift.stride(from: 0, to: points.count, by: strideBy) {
-            let point = points[i]
-            let rect = CGRect(
-                x: point.position.x - particles.size / 2,
-                y: point.position.y - particles.size / 2,
-                width: particles.size,
-                height: particles.size
-            )
-            context.fill(Path(ellipseIn: rect), with: .color(particles.color.opacity(0.7 * opacity)))
-        }
     }
 
     // MARK: - Helpers

@@ -13,7 +13,6 @@ public struct TrailConfiguration: Sendable {
     public var speedMode: SpeedMode
     public var opacity: Double
     public var glow: GlowConfig?
-    public var particles: ParticleConfig?
 
     public init(
         color: TrailColor = .rainbow,
@@ -26,8 +25,7 @@ public struct TrailConfiguration: Sendable {
         style: TrailStyle = .ribbon,
         speedMode: SpeedMode = .adaptive,
         opacity: Double = 0.8,
-        glow: GlowConfig? = nil,
-        particles: ParticleConfig? = nil
+        glow: GlowConfig? = nil
     ) {
         self.color = color
         self.thickness = max(thickness, 1)
@@ -40,7 +38,6 @@ public struct TrailConfiguration: Sendable {
         self.speedMode = speedMode
         self.opacity = max(min(opacity, 1.0), 0.0)
         self.glow = glow
-        self.particles = particles
     }
 
     /// The minimum width factor for the trail tail, accounting for diminishing settings.

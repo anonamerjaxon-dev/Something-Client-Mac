@@ -40,12 +40,11 @@ private func XCTAssertNotNil<T>(_ value: @autoclosure () -> T?, _ message: @auto
 func testDefaultConfiguration() {
     let config = TrailConfiguration()
     XCTAssertEqual(config.thickness, 12.0)
-    XCTAssertEqual(config.length, 100)
-    XCTAssertEqual(config.style, .line)
+    XCTAssertEqual(config.length, 10)
+    XCTAssertEqual(config.style, .ribbon)
     XCTAssertEqual(config.speedMode, .adaptive)
     XCTAssertEqual(config.opacity, 0.8)
     XCTAssertNil(config.glow)
-    XCTAssertNil(config.particles)
 }
 
 func testCustomConfiguration() {
@@ -56,15 +55,13 @@ func testCustomConfiguration() {
         style: .ribbon,
         speedMode: .fixed,
         opacity: 0.5,
-        glow: GlowConfig(radius: 10, intensity: 0.6),
-        particles: ParticleConfig(count: 8, size: 4, color: .white)
+        glow: GlowConfig(radius: 10, intensity: 0.6)
     )
     XCTAssertEqual(config.thickness, 6)
     XCTAssertEqual(config.length, 200)
     XCTAssertEqual(config.style, .ribbon)
     XCTAssertEqual(config.opacity, 0.5)
     XCTAssertNotNil(config.glow)
-    XCTAssertNotNil(config.particles)
 }
 
 func runTrailConfigurationTests() {
