@@ -27,7 +27,7 @@ Full documentation and API reference → [cursor trail/README.md](cursor%20trail
 - **Rewrote** demo app UI with clean, sectioned layout
 - **Updated** README and documentation
 
-### 2025-07-21 — v0.1.0 Initial Release
+### 2025-07-22 — v0.1.0 Initial Release
 
 - Cursor trail with rainbow, solid, and gradient color modes
 - Ribbon and line rendering styles
