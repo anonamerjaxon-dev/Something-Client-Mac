@@ -6,6 +6,7 @@ func testPlaceholder() {
 }
 
 func runCursorTrailTests() {
-    testPlaceholder()
-    print("CursorTrailTests: PASSED ✓")
+    runTestSuite("CursorTrail") {
+        testPlaceholder()
+    }
 }

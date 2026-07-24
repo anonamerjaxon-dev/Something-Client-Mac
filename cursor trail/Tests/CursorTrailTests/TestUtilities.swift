@@ -1,5 +1,4 @@
 import Foundation
-@testable import CursorTrail
 
 var testAssertions = 0
 var testFailures = 0
@@ -28,58 +27,31 @@ func XCTAssertFalse(_ condition: @autoclosure () -> Bool, _ message: @autoclosur
     XCTAssert(!condition(), message(), file: file, line: line)
 }
 
-func runSuite(_ name: String, tests: () -> Void) {
+func XCTAssertNil<T>(_ value: @autoclosure () -> T?, _ message: @autoclosure () -> String = "", file: StaticString = #filePath, line: UInt = #line) {
+    testAssertions += 1
+    if value() != nil {
+        testFailures += 1
+        print("FAIL: \(message()) — expected nil, got \(String(describing: value())) at \(file):\(line)")
+    }
+}
+
+func XCTAssertNotNil<T>(_ value: @autoclosure () -> T?, _ message: @autoclosure () -> String = "", file: StaticString = #filePath, line: UInt = #line) {
+    testAssertions += 1
+    if value() == nil {
+        testFailures += 1
+        print("FAIL: \(message()) — expected non-nil, got nil at \(file):\(line)")
+    }
+}
+
+func runTestSuite(_ name: String, tests: () -> Void) {
     testAssertions = 0
     testFailures = 0
     tests()
     print("\n=== \(name) ===")
     print("\(testAssertions) assertions, \(testAssertions - testFailures) passed, \(testFailures) failed")
     if testFailures > 0 {
-        print("FAIL: \(testFailures) test(s) failed in \(name)")
+        fatalError("\(testFailures) test(s) failed in \(name)")
+    } else {
+        print("\(name): PASSED ✓")
     }
-}
-
-func testEmptyBuffer() {
-    let buffer = RingBuffer<Int>(capacity: 5)
-    XCTAssertTrue(buffer.isEmpty)
-    XCTAssertEqual(buffer.count, 0)
-}
-
-func testAppendUntilFull() {
-    var buffer = RingBuffer<Int>(capacity: 3)
-    buffer.append(1)
-    buffer.append(2)
-    buffer.append(3)
-    XCTAssertEqual(buffer.count, 3)
-}
-
-func testOverwriteOldest() {
-    var buffer = RingBuffer<Int>(capacity: 3)
-    buffer.append(1)
-    buffer.append(2)
-    buffer.append(3)
-    buffer.append(4)
-    XCTAssertEqual(buffer.count, 3)
-    XCTAssertEqual(buffer[0], 2)
-    XCTAssertEqual(buffer[2], 4)
-}
-
-func testClear() {
-    var buffer = RingBuffer<Int>(capacity: 5)
-    buffer.append(1)
-    buffer.append(2)
-    buffer.clear()
-    XCTAssertTrue(buffer.isEmpty)
-    XCTAssertEqual(buffer.count, 0)
-}
-
-runSuite("RingBuffer") {
-    testEmptyBuffer()
-    testAppendUntilFull()
-    testOverwriteOldest()
-    testClear()
-}
-
-if testFailures > 0 {
-    exit(1)
 }

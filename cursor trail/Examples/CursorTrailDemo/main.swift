@@ -52,7 +52,6 @@ class TrailController: ObservableObject {
             .diminishingIntensity(diminishingIntensity)
             .opacity(opacity)
             .style(style)
-            .speed(.adaptive)
 
         if builder.start() {
             isRunning = true

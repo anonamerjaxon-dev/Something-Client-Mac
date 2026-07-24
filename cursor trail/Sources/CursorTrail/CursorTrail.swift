@@ -3,21 +3,6 @@ import QuartzCore
 import AppKit
 import CoreVideo
 
-/// Main entry point for the CursorTrail library.
-///
-/// ## Usage
-///
-/// ```swift
-/// import CursorTrail
-///
-/// CursorTrail()
-///     .color(.gradient(.red, .blue))
-///     .thickness(12)
-///     .style(.ribbon)
-///     .start()
-///
-/// CursorTrail.current?.stop()
-/// ```
 public final class CursorTrail {
     public static var current: CursorTrail?
 
@@ -25,7 +10,6 @@ public final class CursorTrail {
     private var trailWindow: TrailWindow?
     private var trailPoints: RingBuffer<TrailPoint>
     private var lastMouseLocation: CGPoint = .zero
-    private var lastTimestamp: CFTimeInterval = 0
     private var isRunning: Bool = false
     private var displayLink: CVDisplayLink?
     private var displayLinkUserInfo: UnsafeMutableRawPointer?
@@ -58,7 +42,7 @@ public final class CursorTrail {
     @discardableResult
     public func length(_ length: Int) -> CursorTrail {
         configuration.length = max(length, 10)
-        self.trailPoints = RingBuffer(capacity: configuration.length)
+        trailPoints = RingBuffer(capacity: configuration.length)
         return self
     }
 
@@ -93,12 +77,6 @@ public final class CursorTrail {
     }
 
     @discardableResult
-    public func speed(_ mode: SpeedMode) -> CursorTrail {
-        configuration.speedMode = mode
-        return self
-    }
-
-    @discardableResult
     public func glow(_ config: GlowConfig) -> CursorTrail {
         configuration.glow = config
         return self
@@ -117,12 +95,14 @@ public final class CursorTrail {
         guard !isRunning else { return false }
 
         screenHeight = NSScreen.main?.frame.height ?? 0
+        lastMouseLocation = NSEvent.mouseLocation
+        lastMouseLocation.y = screenHeight - lastMouseLocation.y
 
         let window = TrailWindow(configuration: configuration)
-        self.trailWindow = window
+        trailWindow = window
         window.orderFrontRegardless()
 
-        startUpdateTimer()
+        startDisplayLink()
 
         isRunning = true
         CursorTrail.current = self
@@ -132,7 +112,7 @@ public final class CursorTrail {
     public func stop() {
         guard isRunning else { return }
 
-        stopUpdateTimer()
+        stopDisplayLink()
         trailWindow?.orderOut(nil)
         trailWindow = nil
         trailPoints.clear()
@@ -140,13 +120,14 @@ public final class CursorTrail {
         CursorTrail.current = nil
     }
 
-    // MARK: - Display Link (vsync-synced)
+    // MARK: - Display Link
 
-    private func startUpdateTimer() {
-        stopUpdateTimer()
+    private func startDisplayLink() {
+        stopDisplayLink()
 
-        let callback: CVDisplayLinkOutputCallback = { (displayLink, _, _, _, _, userInfo) -> CVReturn in
-            let trail = Unmanaged<CursorTrail>.fromOpaque(userInfo!).takeUnretainedValue()
+        let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, userInfo in
+            guard let userInfo else { return kCVReturnError }
+            let trail = Unmanaged<CursorTrail>.fromOpaque(userInfo).takeUnretainedValue()
             DispatchQueue.main.async { [weak trail] in
                 trail?.updateTrail()
             }
@@ -158,11 +139,11 @@ public final class CursorTrail {
 
         let unmanaged = Unmanaged.passRetained(self)
         displayLinkUserInfo = unmanaged.toOpaque()
-        CVDisplayLinkSetOutputCallback(link, callback, displayLinkUserInfo!)
+        CVDisplayLinkSetOutputCallback(link, callback, displayLinkUserInfo)
         CVDisplayLinkStart(link)
     }
 
-    private func stopUpdateTimer() {
+    private func stopDisplayLink() {
         guard let link = displayLink else { return }
         CVDisplayLinkStop(link)
         displayLink = nil
@@ -172,42 +153,35 @@ public final class CursorTrail {
         }
     }
 
+    // MARK: - Trail Update
+
+    private static let movementThreshold: CGFloat = 0.5
+    private static let maxFadeAccumulator: Double = 10.0
+
     private func updateTrail() {
         guard isRunning else { return }
 
-        var currentLocation = NSEvent.mouseLocation
-        currentLocation.y = screenHeight - currentLocation.y
+        var location = NSEvent.mouseLocation
+        location.y = screenHeight - location.y
 
-        let dx = currentLocation.x - lastMouseLocation.x
-        let dy = currentLocation.y - lastMouseLocation.y
-        let distSq = dx * dx + dy * dy
-        let threshold: CGFloat = 0.5
-        let isMoving = distSq > threshold * threshold
+        let dx = location.x - lastMouseLocation.x
+        let dy = location.y - lastMouseLocation.y
+        let isMoving = (dx * dx + dy * dy) > (Self.movementThreshold * Self.movementThreshold)
 
         if isMoving {
-            let currentTime = CACurrentMediaTime()
-            let dt = currentTime - lastTimestamp
-            let distance = sqrt(distSq)
-            let velocity = dt > 0 ? CGFloat(distance / dt) : 0
-
-            let point = TrailPoint(position: currentLocation, timestamp: currentTime, velocity: velocity)
-            trailPoints.append(point)
-            lastMouseLocation = currentLocation
-            lastTimestamp = currentTime
-        }
-
-        if isMoving {
+            trailPoints.append(TrailPoint(position: location))
+            lastMouseLocation = location
             fadeAccumulator = 0
-        } else if trailPoints.count > 0 {
+        } else if !trailPoints.isEmpty {
             fadeAccumulator += configuration.fadeSpeed
-            while fadeAccumulator >= 1.0 && trailPoints.count > 0 {
-                _ = trailPoints.removeFirst()
+            while fadeAccumulator >= 1.0, !trailPoints.isEmpty {
+                trailPoints.removeFirst()
                 fadeAccumulator -= 1.0
             }
-            fadeAccumulator = min(fadeAccumulator, 10.0)
+            fadeAccumulator = min(fadeAccumulator, Self.maxFadeAccumulator)
         }
 
-        if isMoving || trailPoints.count > 0 {
+        if isMoving || !trailPoints.isEmpty {
             trailWindow?.update(trailPoints)
         }
     }

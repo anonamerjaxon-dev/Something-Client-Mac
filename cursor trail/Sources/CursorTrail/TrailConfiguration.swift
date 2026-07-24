@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Complete configuration for a cursor trail.
 public struct TrailConfiguration: Sendable {
     public var color: TrailColor
     public var thickness: CGFloat
@@ -10,7 +9,6 @@ public struct TrailConfiguration: Sendable {
     public var diminishing: Bool
     public var diminishingIntensity: Double
     public var style: TrailStyle
-    public var speedMode: SpeedMode
     public var opacity: Double
     public var glow: GlowConfig?
 
@@ -23,7 +21,6 @@ public struct TrailConfiguration: Sendable {
         diminishing: Bool = true,
         diminishingIntensity: Double = 0.7,
         style: TrailStyle = .ribbon,
-        speedMode: SpeedMode = .adaptive,
         opacity: Double = 0.8,
         glow: GlowConfig? = nil
     ) {
@@ -35,15 +32,14 @@ public struct TrailConfiguration: Sendable {
         self.diminishing = diminishing
         self.diminishingIntensity = max(min(diminishingIntensity, 1.0), 0.0)
         self.style = style
-        self.speedMode = speedMode
         self.opacity = max(min(opacity, 1.0), 0.0)
         self.glow = glow
     }
 
-    /// The minimum width factor for the trail tail, accounting for diminishing settings.
-    /// - Parameter forLine: `true` for line style (tapers to 20%), `false` for ribbon (tapers to 0%).
     func diminishingMin(forLine: Bool) -> CGFloat {
-        if !diminishing { return forLine ? 0.2 : 1.0 }
+        guard diminishing else {
+            return forLine ? 0.2 : 1.0
+        }
         let factor = max(1.0 - diminishingIntensity, 0.0)
         return forLine ? 0.2 * factor : factor
     }

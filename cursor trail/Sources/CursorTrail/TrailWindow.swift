@@ -1,17 +1,12 @@
 import SwiftUI
-import Combine
 
-/// Transparent overlay window that floats above normal app content.
 final class TrailWindow: NSWindow {
-
-    var hostingController: NSHostingController<TrailContentView>!
     let model: TrailModel
 
     init(configuration: TrailConfiguration = .init()) {
         self.model = TrailModel()
         let contentView = TrailContentView(configuration: configuration, model: model)
-        let hc = NSHostingController(rootView: contentView)
-        self.hostingController = hc
+        let hostingController = NSHostingController(rootView: contentView)
 
         super.init(
             contentRect: .zero,
@@ -20,7 +15,7 @@ final class TrailWindow: NSWindow {
             defer: false
         )
 
-        self.contentViewController = hc
+        self.contentViewController = hostingController
         self.isOpaque = false
         self.backgroundColor = .clear
         self.hasShadow = false
@@ -42,12 +37,10 @@ final class TrailWindow: NSWindow {
     }
 }
 
-/// Shared reactive model so SwiftUI views can observe trail point changes.
 final class TrailModel: ObservableObject {
     @Published var trailPoints: RingBuffer<TrailPoint> = .init(capacity: 100)
 }
 
-/// SwiftUI view that hosts the Canvas for rendering the trail.
 struct TrailContentView: View {
     @ObservedObject var model: TrailModel
     private let renderer: TrailRenderer
@@ -58,7 +51,7 @@ struct TrailContentView: View {
     }
 
     var body: some View {
-        Canvas { context, size in
+        Canvas { context, _ in
             renderer.draw(context: context, points: model.trailPoints)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
