@@ -139,6 +139,26 @@
             "target": "PolymorphAgent",
             "configuration": "release",
             "preLaunchTask": "swift: Build Release PolymorphAgent (polymorph)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/desktop-canvas/Spike/PermissionsTest",
+            "name": "Debug PermissionsTest (desktop-canvas/Spike/PermissionsTest)",
+            "target": "PermissionsTest",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug PermissionsTest (desktop-canvas/Spike/PermissionsTest)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/desktop-canvas/Spike/PermissionsTest",
+            "name": "Release PermissionsTest (desktop-canvas/Spike/PermissionsTest)",
+            "target": "PermissionsTest",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release PermissionsTest (desktop-canvas/Spike/PermissionsTest)"
         }
     ]
 }
