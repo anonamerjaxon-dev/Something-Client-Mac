@@ -305,6 +305,8 @@
 ## Dependency order
 
 ```
+Phase 0 (research spikes) ← DO THIS FIRST
+    ↓
 Phase 1 (models)
     ↓
 Phase 2 (protocol)
@@ -350,3 +352,333 @@ Phases 8–11 are sequential (each builds on the previous demo view).
 | 13 — Docs | ~150 | Low |
 | 14 — Polish | — | Manual |
 | **Total** | **~2,650** | |
+
+---
+
+## Risk Audit & Contingency Plans
+
+Each risk is rated by likelihood (1–5) × impact (1–5) = severity score.
+Risks ≥ 12 are flagged as critical and have a Phase 0 research spike.
+
+### R1: Desktop window level rejected or broken on macOS 15+
+
+| Likelihood | Impact | Score |
+|---|---|---|
+| 3 | 5 | **15 — CRITICAL** |
+
+The entire architecture depends on `CGWindowLevelForKey(.desktopIconWindow) - 1`
+(or `kCGDesktopWindowLevel - 1`) placing our content between the system
+wallpaper and desktop icons. Apple could change or remove this level at any
+time. This is a private/sparse API — it's not in the public headers, though
+Electron has used it for years and commercial apps like Dynamic Wallpaper
+(updated through 2026) rely on it.
+
+**What could go wrong:**
+- macOS 15 Sequoia changed the desktop compositor (widgets now render on the
+  desktop itself). The level might be redefined or the wallpaper might render
+  on top of our window.
+- `CGWindowLevelForKey(.desktopIconWindow)` could return 0 or a wrong value.
+- In macOS 14+, `NSView.clipsToBounds` default changed from `true` to `false`,
+  which could cause content bleeding.
+
+**Verification (Phase 0 — BEFORE any other code):**
+1. Write a spike script that creates a red `NSWindow` at
+   `kCGDesktopWindowLevel - 1` / `kCGDesktopIconWindowLevel - 1` and logs
+   the actual level integer.
+2. Test on macOS 15.x (the development machine). Verify the red window appears
+   behind desktop icons but above the wallpaper.
+3. Test Mission Control, Spaces switching, full-screen app transitions.
+4. Test with Stage Manager enabled.
+5. Verify `NSView.clipsToBounds = true` is explicitly set on the content view
+   (macOS 14+ changed the default).
+
+**Contingency plan (if broken):**
+
+| Fallback | Description | Trade-off |
+|---|---|---|
+| **A) `kCGDesktopWindowLevel` directly** | Try the raw integer level (often around -1000). Log and test. | Same risk of breakage, just a different constant. |
+| **B) `NSWindow.Level(rawValue: -1000)`** | Hardcode the level integer observed from a working system. | Brittle across OS versions but works as a stopgap. |
+| **C) Normal window + `setDesktopImageURL` snapshot** | Render to an offscreen buffer, snapshot, save as PNG, call `NSWorkspace.shared.setDesktopImageURL`. Redo every N seconds for dynamic content. | High latency (seconds between frames). No 60fps. But works for slow Game of Life and static images. Video not possible. |
+| **D) ScreenSaver-level overlay (CursorTrail pattern)** | Use `.screenSaver` level window (proven working in CursorTrail module) at full screen. This floats ABOVE icons, not behind them. Hide all desktop icons via Finder defaults. | Icons hidden. Not ideal, but fully functional and proven in this codebase. |
+| **E) Abort desktop-level window approach** | Switch to rendering in a regular app window (not on desktop). Ship as a standalone app with its own window, not a wallpaper replacement. | Loses the "wallpaper" experience. But all other features (Game of Life, video, editing) still work perfectly. |
+
+**Recommended strategy:**
+1. Phase 0 spike first. If the desktop level works → proceed with plan.
+2. If broken: try Fallback B (hardcoded level). If that also fails, use
+   Fallback C for static/slow content + Fallback D for video/dynamic content.
+3. Last resort: Fallback E (standalone app window mode). Still a great product,
+   just not integrated into the desktop.
+
+---
+
+### R2: MTKView compositing with AVPlayerLayer in same NSWindow
+
+| Likelihood | Impact | Score |
+|---|---|---|
+| 3 | 3 | 9 — Medium |
+
+The plan places multiple `MTKView` subviews (Game of Life) and `AVPlayerLayer`
+sublayers (video) inside a single `NSWindow.contentView`. CALayer compositing
+between Metal-backed views and CoreAnimation layers can cause:
+- Flickering when Metal presents a drawable while AVPlayerLayer updates
+- Black flashes at the boundary between views
+- Z-order issues where one content type draws over the other
+
+**Mitigation (built into the plan):**
+- Each canvas is a separate `NSView` with `clipsToBounds = true` — no overlap
+  between canvases means no compositing conflict.
+- The window's content view uses `wantsLayer = true` and
+  `canDrawSubviewsIntoLayer = true` for proper layer-backed compositing.
+
+**Contingency plan (if broken):**
+
+| Fallback | Description |
+|---|---|
+| **A) Separate NSWindows per canvas** | Each canvas gets its own desktop-level `NSWindow`. No subview compositing at all. More windows but no rendering conflicts. |
+| **B) Single MTKView for all Game of Life** | One MTKView covers all Game of Life canvases on a screen. Each canvas is rendered as a viewport region in the same Metal render pass. Videos get their own windows or use a separate AVPlayerLayer on top. |
+| **C) Use CALayer hierarchy for both** | Render Game of Life into a `CALayer` bitmap (via `MTLTexture` → `CGImage` → `CALayer.contents`) instead of live MTKView. Simpler compositing but loses Metal's direct-to-screen performance (extra copy step). |
+
+---
+
+### R3: AVPlayer seamless loop gap
+
+| Likelihood | Impact | Score |
+|---|---|---|
+| 4 | 2 | 8 — Medium |
+
+`AVPlayerItemDidPlayToEndTime` + `seek(to: .zero)` can produce a visible
+frame flash or gap (1–3 frames) because `seek(to:)` is asynchronous.
+
+**Mitigation:**
+- Use `player.actionAtItemEnd = .none` and observe the boundary manually
+- Pre-roll: seek to `kCMTimeZero`, call `player.play()` immediately,
+  and use `AVPlayerItem.seekingWaitsForVideoCompositionRendering` = false
+- If gap persists: use two `AVPlayer` instances and crossfade between them
+  (one plays while the other pre-buffers the next loop)
+
+**Contingency plan:**
+
+| Fallback | Description |
+|---|---|
+| **A) `AVPlayerLooper`** | iOS/tvOS only — NOT available on macOS. Can't use. |
+| **B) Two-player crossfade** | Create two AVPlayers. Player A plays; when 0.5s remain, Player B seeks to start and begins playing with opacity 0. Crossfade A→B over 0.5s. Swap roles. | 
+| **C) `AVAssetReader` + manual frame push** | Read decoded frames via `AVAssetReader`, push to a Metal texture, render on a quad in the existing MTKView. Total control over looping but more code. |
+
+---
+
+### R4: Metal compute kernel correctness for arbitrary rule sets
+
+| Likelihood | Impact | Score |
+|---|---|---|
+| 2 | 4 | 8 — Medium |
+
+The compute kernel needs to correctly apply arbitrary birth/survival rule
+sets from a uniform buffer. The kernel itself is simple (8-neighbor count +
+rule lookup), but edge cases:
+- Toroidal vs. dead-border boundary conditions: toroidal wraps around
+  (standard for Game of Life), dead-border treats outside cells as dead.
+  User might expect toroidal.
+- Rule packing into a uniform buffer: encode birth set as a 9-bit mask,
+  survival set as a 9-bit mask. Kernel does `(neighborCount < 9) && ((mask >>
+  neighborCount) & 1)`.
+- The kernel dispatches one thread per cell. Threadgroup size should be
+  optimized (8×8 or 16×16) for occupancy.
+
+**Mitigation:**
+- Unit test the rule encoding/decoding in Swift first (Phase 1.5)
+- Use a reference CPU implementation to validate the GPU output for known
+  patterns (glider, blinker, block)
+
+**Contingency plan:**
+
+| Fallback | Description |
+|---|---|
+| **A) CPU fallback for small grids** | If Metal pipeline fails to compile/run, use a Swift CPU implementation for grids under 10,000 cells. Slow at 60fps but works for debugging. |
+| **B) Pre-baked rule tables** | Instead of arbitrary rules, ship only the 9 preset rule sets as compile-time constants in the shader. Add custom rules later once the pipeline is stable. |
+
+---
+
+### R5: Mission Control / Exposé shows desktop window
+
+| Likelihood | Impact | Score |
+|---|---|---|
+| 4 | 2 | 8 — Medium |
+
+When the user invokes Mission Control or Exposé, the desktop canvas window
+could appear as a separate tile, looking broken/confusing.
+
+**Mitigation:**
+- Add `.stationary` to `collectionBehavior` — prevents the window from
+  moving when the user switches Spaces
+- Add `.transient` (used by CursorTrail) — may hide from Exposé
+- Set `window.skipTaskbar = true` equivalent (macOS: use
+  `NSWindowCollectionBehavior.transient` + `.ignoresCycle`)
+- Explicit `NSWindowCollectionBehavior`:
+  ```swift
+  window.collectionBehavior = [
+      .canJoinAllSpaces,
+      .fullScreenAuxiliary,
+      .stationary,       // stays put during Exposé
+      .transient,        // may hide from Mission Control
+      .ignoresCycle      // excluded from Cmd+Tab
+  ]
+  ```
+
+**Contingency plan:**
+
+| Fallback | Description |
+|---|---|
+| **A) Set `window.level = kCGDesktopWindowLevel - 1`** | At this level, the window is part of the desktop "background" and macOS might not expose it to Mission Control at all. |
+| **B) Hide window during Mission Control** | Observe `NSWorkspace.activeSpaceDidChangeNotification` or use a `CGEventTap` to detect Exposé activation. Hide the window during the transition. Adds complexity. |
+| **C) Accept it** | If the window shows as a small tile in Mission Control, it may not matter much — many users never use Mission Control on the desktop space. |
+
+---
+
+### R6: Screen recording permission required
+
+| Likelihood | Impact | Score |
+|---|---|---|
+| 2 | 3 | 6 — Medium |
+
+CursorTrail uses `CGDisplayHideCursor` which requires Accessibility
+permission, and its overlay at `.screenSaver` level may require Screen
+Recording permission on macOS 14+.
+
+Our desktop-level window is at a lower level than icons and does NOT hide
+the cursor or capture any pixels. It should NOT require either permission.
+
+**Verification (Phase 0 spike):**
+- Create a minimal desktop-level window and verify it renders without
+  triggering the Screen Recording permission dialog.
+- If permissions ARE required, add a permissions check like CursorTrail's
+  `PermissionsManager` and guide the user through System Settings.
+
+**Contingency:** If Screen Recording permission is required, add the same
+permission flow CursorTrail uses. It's a one-time setup per app. Not ideal
+but acceptable.
+
+---
+
+### R7: Performance — many MTKViews competing for GPU time
+
+| Likelihood | Impact | Score |
+|---|---|---|
+| 3 | 3 | 9 — Medium |
+
+Each `MTKView` creates its own `CAMetalLayer`, command buffer, and render
+pass. With 10+ Game of Life canvases, that's 10+ MTKViews each submitting
+work to the GPU. This introduces overhead from multiple command buffer
+submissions.
+
+**Mitigation:**
+- Share a single `MTLDevice` and `MTLCommandQueue` across all MTKViews
+- Set `mtkView.isPaused = true` on canvases where the game is paused
+- Use `mtkView.preferredFramesPerSecond = 30` for slower generations
+- Cap total cells at 10 million (soft cap in editor)
+
+**Contingency plan:**
+
+| Fallback | Description |
+|---|---|
+| **A) Single MTKView, multiple render passes** | One MTKView per screen. Each frame, iterate all Game of Life canvases: set viewport scissor, dispatch compute, render to that region. Single command buffer submission. Best performance. |
+| **B) Manual display link + single command buffer** | Don't use MTKView's built-in render loop. Use a single `CVDisplayLink` (like CursorTrail), manually create `CAMetalLayer`s, and submit one command buffer per frame handling all canvases. Maximum control, more code. |
+
+This is the approach I'd recommend going with from the start (Fallback A),
+rather than waiting for it to become a problem. The per-canvas MTKView
+approach in the main plan is simpler to implement first but should be
+refactored to the single-MTKView approach if any performance issue appears.
+
+**Updated architecture recommendation:**
+```
+ScreenManager
+  └── CanvasWindow (one per NSScreen)
+       ├── contentView (NSView, wantsLayer=true)
+       │   ├── MetalRendererView (single MTKView, fills entire screen)
+       │   │     → renders ALL Game of Life canvases as viewport regions
+       │   ├── Video0View (NSView + AVPlayerLayer, positioned at canvas frame)
+       │   ├── Video1View (NSView + AVPlayerLayer, positioned at canvas frame)
+       │   └── ...
+       └──
+```
+This eliminates R2 entirely and mitigates R7. The plan phases should be
+updated to reflect this.
+
+---
+
+### R8: macOS 14+ `NSView.clipsToBounds` default change
+
+| Likelihood | Impact | Score |
+|---|---|---|
+| 5 | 2 | **10 — High** |
+
+In macOS 14 Sonoma, Apple changed `NSView.clipsToBounds` default from `true`
+to `false`. This means subviews and sublayers can draw outside their bounds
+unless explicitly clipped. For DesktopCanvas, this means:
+- Game of Life cells could render outside their canvas frame
+- Video could bleed into adjacent canvases
+- The overlap prevention system would be visually undermined
+
+**Mitigation:**
+- Explicitly set `clipsToBounds = true` on every canvas subview and the
+  window content view. Do NOT rely on defaults.
+- Add `CALayer.masksToBounds = true` on any `CALayer` instances.
+
+This is a simple fix — just be explicit. But easy to miss. Added as a
+reminder in Phases 5 and 7.
+
+---
+
+### R9: Preset file format compatibility across versions
+
+| Likelihood | Impact | Score |
+|---|---|---|
+| 2 | 4 | 8 — Medium |
+
+`CanvasLayout` is `Codable`. If we add fields in future versions, old preset
+files won't decode. This will break the auto-restore feature on update.
+
+**Mitigation:**
+- Use optional properties with defaults for all `GameOfLifeConfig`/`VideoConfig`
+  fields
+- Add a `version: Int` field to `CanvasLayout` (default 1)
+- On decode failure, log a warning and reset to default layout (don't crash)
+
+**Contingency:** If format changes dramatically between versions, include a
+migration function that reads v1 format and outputs v2 format.
+
+---
+
+### Research spike (Phase 0) — must complete before Phase 1
+
+Before writing any production code, execute these verification steps:
+
+- [ ] **S0.1** Desktop window level verification
+  - Create `desktop-canvas/Spike/WindowLevelTest/` with a minimal Swift script
+  - Create `NSWindow` at `kCGDesktopWindowLevel - 1` and
+    `kCGDesktopIconWindowLevel - 1`, fill with red, log actual levels
+  - Verify it renders behind icons, above wallpaper
+  - Test on macOS 15.x (the development machine)
+  - Test Spaces switching, Stage Manager, full-screen apps
+
+- [ ] **S0.2** MTKView + AVPlayerLayer compositing test
+  - Create a spike with one MTKView (colored quads) and one AVPlayerLayer
+    (looping video) in the same NSWindow.contentView
+  - Verify no flickering, no black flashes, correct z-order
+
+- [ ] **S0.3** Permission check
+  - Verify the desktop-level window does NOT trigger Screen Recording or
+    Accessibility permission prompts
+  - If it does, document which permission and plan how to guide users
+
+- [ ] **S0.4** Metal compute kernel spike
+  - Write a minimal Game of Life compute kernel (one grid, Conway rules)
+  - Verify dispatch, buffer swap, and fragment shader rendering work
+  - Profile: 500×500 grid at 60fps
+
+- [ ] **S0.5** AVPlayer seamless loop spike
+  - Create AVPlayer with a test MP4, loop 10 times
+  - Measure frame gap at loop boundary
+  - If gap exists, prototype the two-player crossfade approach
+
+If any spike fails with no viable contingency, the plan must be revised
+before proceeding to Phase 1.
