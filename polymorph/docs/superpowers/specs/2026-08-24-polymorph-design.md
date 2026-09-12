@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-24
 **Status:** Approved design, pending implementation plan
-**Module:** `polymorph/` (Something Client Mac)
+**Module:** `polymorph/` (Somno Mac Client)
 
 ## Problem
 

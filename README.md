@@ -1,4 +1,4 @@
-# Something Client Mac
+# Somno Mac Client
 
 A macOS UI enhancement toolkit inspired by Minecraft hack-client aesthetics. Built as a learning project — each module adds a distinct visual layer to the macOS experience.
 
@@ -68,7 +68,7 @@ sudo ./build/MotionSensor
 ## Project Structure
 
 ```
-something client mac/
+somno mac client/
 ├── cursor trail/     SwiftPM library — mouse trail rendering
 ├── polymorph/        SwiftPM library — custom cursor replacement
 ├── totem pop/        SwiftUI app — motion sensor / totem animation
