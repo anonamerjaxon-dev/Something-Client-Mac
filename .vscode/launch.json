@@ -39,6 +39,106 @@
             "target": "CursorTrailDemo",
             "configuration": "release",
             "preLaunchTask": "swift: Build Release CursorTrailDemo (cursor trail)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/totem pop/.worktrees/totempop",
+            "name": "Debug TotemPopDemo (totem pop/.worktrees/totempop)",
+            "target": "TotemPopDemo",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug TotemPopDemo (totem pop/.worktrees/totempop)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/totem pop/.worktrees/totempop",
+            "name": "Release TotemPopDemo (totem pop/.worktrees/totempop)",
+            "target": "TotemPopDemo",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release TotemPopDemo (totem pop/.worktrees/totempop)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/polymorph",
+            "name": "Debug TestRunner (polymorph)",
+            "target": "TestRunner",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug TestRunner (polymorph)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/polymorph",
+            "name": "Release TestRunner (polymorph)",
+            "target": "TestRunner",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release TestRunner (polymorph)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/polymorph",
+            "name": "Debug PolymorphDemo (polymorph)",
+            "target": "PolymorphDemo",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug PolymorphDemo (polymorph)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/polymorph",
+            "name": "Release PolymorphDemo (polymorph)",
+            "target": "PolymorphDemo",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release PolymorphDemo (polymorph)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/polymorph",
+            "name": "Debug PolymorphCLI (polymorph)",
+            "target": "PolymorphCLI",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug PolymorphCLI (polymorph)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/polymorph",
+            "name": "Release PolymorphCLI (polymorph)",
+            "target": "PolymorphCLI",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release PolymorphCLI (polymorph)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/polymorph",
+            "name": "Debug PolymorphAgent (polymorph)",
+            "target": "PolymorphAgent",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug PolymorphAgent (polymorph)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/polymorph",
+            "name": "Release PolymorphAgent (polymorph)",
+            "target": "PolymorphAgent",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release PolymorphAgent (polymorph)"
         }
     ]
 }

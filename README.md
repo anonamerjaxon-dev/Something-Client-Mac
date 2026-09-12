@@ -1,53 +1,104 @@
-# Something-Client-Mac
+# Something Client Mac
 
-A macOS UI enhancement toolkit inspired by Minecraft hack client aesthetics. This is my first project — learning as I go.
+A macOS UI enhancement toolkit inspired by Minecraft hack-client aesthetics. Built as a learning project — each module adds a distinct visual layer to the macOS experience.
 
 ## Modules
 
-### Existing
+### CursorTrail
 
-#### [CursorTrail](cursor%20trail/README.md)
-
-A lightweight Swift library that draws a smooth, animated trail behind the mouse cursor. Renders on a transparent overlay at `.screenSaver` window level — floating above everything while passing clicks through.
+A Swift library that draws a smooth, animated trail behind the mouse cursor. Renders on a transparent overlay at `.screenSaver` window level — floating above everything while passing clicks through.
 
 ```swift
 import CursorTrail
-CursorTrail().start()
+CursorTrail()
+    .color(.gradient(.cyan, .purple))
+    .style(.ribbon)
+    .start()
 ```
 
-Full documentation and API reference → [cursor trail/README.md](cursor%20trail/README.md)
+→ [cursor trail/README.md](cursor%20trail/README.md) for full API and presets.
 
-### Planned
+### CursorFX *(codenamed Polymorph)*
 
-The core systems are the **HUD** (heads-up display overlay) and the **Client** (central module manager), which will tie everything together.
+System-wide custom cursor replacement using WindowServer-level cursor registration. Replaces the stock macOS arrow, ibeam, pointing hand, and more with custom PNG/SVG artwork. Registers images directly into the CoreGraphics cursor registry so custom cursors render natively — no overlay window, no input latency.
+
+This is an **original implementation** built by reverse-engineering the private CGS cursor API surface (the same class of APIs that Mousecape and MaCursor discovered). The approach — registration strategy, enforcement model, state mapping, and image pipeline — is our own.
+
+```swift
+import Polymorph
+let theme = try CursorTheme.load(directory: skinFolder)
+try Polymorph.apply(theme: theme)
+```
+
+→ [polymorph/README.md](polymorph/README.md) for skin format, commands, and library API.
+
+> **⚠️ Known issue (Sept 2026):** Custom cursors currently only render during transitional states — app splash/loading screens, Mission Control animations, etc. During normal foreground app usage, macOS reasserts the stock cursor. The registration succeeds but the system has a higher-priority cursor path we haven't intercepted yet. This is the #1 item to solve next session.
+
+### Black Hole (Ghostty)
+
+A GLSL custom shader for the [Ghostty](https://ghostty.org) terminal that renders a physically-accurate Schwarzschild black hole with gravitational lensing, a thin accretion disk, photon ring, and lensed starfield. Integrates null geodesics numerically per pixel.
+
+Three size modes: Pomodoro clock, live Claude Code context-window tracking (via OSC 12 cursor color encoding), and a self-running demo loop.
+
+→ [black hole/ghostty-blackhole-main/README.md](black%20hole/ghostty-blackhole-main/README.md)
+
+### Totem Pop *(in development)*
+
+Reads the Bosch BMI286 IMU accelerometer from Apple Silicon Macs via IOHID to detect sudden motion (desk slap, laptop bump). When triggered, a totem animation will play on screen.
+
+```bash
+cd totem\ pop/test
+./build.sh
+sudo ./build/MotionSensor
+```
+
+→ [totem pop/CLAUDE.md](totem%20pop/CLAUDE.md) for hardware requirements and architecture.
+
+## Planned
 
 | Module | Description |
 |---|---|
-| **Totem Pop** | A totem animation appears when the Mac detects a sudden motion — like slapping the desk or laptop. Uses the built-in motion sensor. |
-| **Customizable Cursor** | Replace the default cursor with custom images. Different images for different states (normal, hover, drag, busy), with full control over the exact click point. |
-| **Moving Wallpaper** | Import MP4 videos to set as a live animated desktop background. |
-| **Fun Wallpapers** | Conway's Game of Life and other cellular automata play out randomly on the desktop. Customize the rules, colors, speed, and grid size. |
-| **Window Drag Trail** | A trail effect follows windows as you drag them around the screen. |
-| **Music Display** | A real-time audio visualizer showing frequency levels — like those bouncing bar displays — for whatever audio is playing. |
-| **Black Hole** | Still brainstorming... |
+| **HUD** | Heads-up display overlay — the core system all modules plug into |
+| **Client** | Central module manager — toggles, config, and coordination |
+| **Moving Wallpaper** | MP4 videos as animated desktop background |
+| **Fun Wallpapers** | Conway's Game of Life and other cellular automata on the desktop |
+| **Window Drag Trail** | Trail effect follows windows as you drag them |
+| **Music Display** | Real-time audio visualizer from system audio output |
 
----
+## Project Structure
 
-## Updates
+```
+something client mac/
+├── cursor trail/     SwiftPM library — mouse trail rendering
+├── polymorph/        SwiftPM library — custom cursor replacement
+├── totem pop/        SwiftUI app — motion sensor / totem animation
+├── black hole/       Ghostty terminal shader — black hole rendering
+├── LICENSE           MIT
+└── README.md         ← you are here
+```
 
-### 2026-07-22 — v0.2.0 Cleanup & Optimization
+Each module has its own `Package.swift` (or equivalent), tests, and documentation. They are independent but designed to eventually plug into a shared HUD/Client system.
 
-- **Removed** particle effects system — scrapped due to instability
-- **Fixed** thread safety in CVDisplayLink with proper `Unmanaged` retain/release
-- **Fixed** use-after-free potential in display link callback
-- **Rewrote** demo app UI with clean, sectioned layout
-- **Updated** README and documentation
+## Development
 
-### 2026-07-01 — v0.1.0 Initial Release
+```bash
+# CursorTrail
+cd cursor\ trail && swift build && swift test
 
-- Cursor trail with rainbow, solid, and gradient color modes
-- Ribbon and line rendering styles
-- Adaptive speed-based width
-- Glow effect support
-- CVDisplayLink vsync-synced rendering
-- Builder pattern API
+# CursorFX / Polymorph
+cd polymorph && ./build.sh
+
+# Totem Pop
+cd totem\ pop/test && ./build.sh
+```
+
+## Architecture Notes
+
+- **CursorTrail** renders via a transparent `NSWindow` at `.screenSaver` level with `ignoresMouseEvents = true`. Rendering is synced to display refresh via `CVDisplayLink`.
+- **CursorFX** uses `CGSRegisterCursorWithImages` (private CoreGraphics) to register custom images into WindowServer's cursor cache. The enforcement timer re-registers on a loop to fight the system's tendency to reassert stock cursors.
+- **Black Hole** is a single `.glsl` shader file. No custom uniforms — context data is encoded into the cursor color (OSC 12) and decoded by the shader each frame.
+- **Totem Pop** uses `IOHIDDeviceOpen` (requires `sudo`) to read raw accelerometer data from the BMI286 chip via `AppleSPUHIDDevice`.
+
+## License
+
+MIT

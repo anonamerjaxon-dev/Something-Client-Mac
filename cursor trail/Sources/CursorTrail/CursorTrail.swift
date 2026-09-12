@@ -77,6 +77,12 @@ public final class CursorTrail {
     }
 
     @discardableResult
+    public func speed(_ mode: SpeedMode) -> CursorTrail {
+        configuration.speedMode = mode
+        return self
+    }
+
+    @discardableResult
     public func glow(_ config: GlowConfig) -> CursorTrail {
         configuration.glow = config
         return self

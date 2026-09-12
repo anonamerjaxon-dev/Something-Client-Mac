@@ -1,11 +1,14 @@
 # macOS system files
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
 
 # Xcode / Swift build files
 .build/
-.build-local/
 .build-release/
+.build-local/
 DerivedData/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
@@ -16,12 +19,15 @@ xcuserdata/
 *.dSYM
 *.o
 *.swiftmodule
-
-# Your specific local folders (keep these off GitHub)
-docs/
-2nd try/
-CursorTrail.app/
+*.pcm
 
 # Package manager
 .swiftpm/
 Package.resolved
+
+# Tool artifacts
+.superpowers/
+
+# IDE
+.idea/
+.vscode/
