@@ -15,6 +15,12 @@ final class EditorState: ObservableObject {
     @Published var snapToCanvasEdges: Bool = true
     @Published var margin: CGFloat = 0
 
+    @Published var showPresetManager: Bool = false
+
+    var presetInfos: [PresetInfo] {
+        DesktopCanvas.shared.listPresetsWithMetadata()
+    }
+
     enum StatusType {
         case info
         case warning
@@ -335,6 +341,48 @@ final class EditorState: ObservableObject {
 
                 self.autoApplyIfNeeded()
             }
+        }
+    }
+
+    func presetExists(named name: String) -> Bool {
+        let url = DesktopCanvas.presetsDirectory().appendingPathComponent("\(name).json")
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
+    func saveCurrentPreset(named name: String) {
+        guard !name.isEmpty else {
+            setStatus("Please enter a preset name", type: .warning)
+            return
+        }
+        let dir = DesktopCanvas.presetsDirectory()
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let layout = CanvasLayout(name: name, canvases: canvases)
+        do {
+            try DesktopCanvas.shared.savePreset(layout, named: name)
+            setStatus("Saved preset: \"\(name)\"", type: .info)
+        } catch {
+            setStatus("Failed to save preset: \(error.localizedDescription)", type: .error)
+        }
+    }
+
+    func loadPreset(named name: String) {
+        do {
+            let layout = try DesktopCanvas.shared.loadPreset(named: name)
+            canvases = layout.canvases
+            selectedCanvasID = nil
+            setStatus("Loaded preset: \"\(name)\" (\(layout.canvases.count) canvas(es))", type: .info)
+            autoApplyIfNeeded()
+        } catch {
+            setStatus("Failed to load preset: \(error.localizedDescription)", type: .error)
+        }
+    }
+
+    func deletePreset(named name: String) {
+        do {
+            try DesktopCanvas.shared.deletePreset(named: name)
+            setStatus("Deleted preset: \"\(name)\"", type: .info)
+        } catch {
+            setStatus("Failed to delete preset: \(error.localizedDescription)", type: .error)
         }
     }
 }

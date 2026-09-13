@@ -93,6 +93,10 @@ final class VideoProvider: CanvasProvider {
         playerLayer = nil
         statusObserver?.invalidate()
         statusObserver = nil
+        if let observer = loopObserver {
+            NotificationCenter.default.removeObserver(observer)
+            loopObserver = nil
+        }
 
         let container = NSView(frame: frame)
         container.wantsLayer = true

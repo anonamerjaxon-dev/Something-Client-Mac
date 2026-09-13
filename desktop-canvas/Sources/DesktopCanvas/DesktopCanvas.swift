@@ -6,6 +6,13 @@ public enum ApplyResult {
     case error(String)
 }
 
+public struct PresetInfo: Identifiable {
+    public var id: String { name }
+    public let name: String
+    public let canvasCount: Int
+    public let modifiedAt: Date
+}
+
 public final class DesktopCanvas {
     public static let shared = DesktopCanvas()
 
@@ -77,6 +84,25 @@ public final class DesktopCanvas {
             .filter { $0.pathExtension == "json" && $0.lastPathComponent != "_last_used.json" }
             .map { $0.deletingPathExtension().lastPathComponent }
             .sorted()
+    }
+
+    public func listPresetsWithMetadata() -> [PresetInfo] {
+        let dir = Self.presetsDirectory()
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey],
+            options: .skipsHiddenFiles
+        ) else { return [] }
+
+        return contents
+            .filter { $0.pathExtension == "json" && $0.lastPathComponent != "_last_used.json" }
+            .compactMap { url in
+                let name = url.deletingPathExtension().lastPathComponent
+                let modifiedAt = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? Date.distantPast
+                let layout = try? CanvasLayout.load(from: url)
+                let count = layout?.canvases.count ?? 0
+                return PresetInfo(name: name, canvasCount: count, modifiedAt: modifiedAt)
+            }
+            .sorted { $0.modifiedAt > $1.modifiedAt }
     }
 
     public static func presetsDirectory() -> URL {

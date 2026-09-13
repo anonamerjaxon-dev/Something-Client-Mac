@@ -122,25 +122,41 @@ final class LayoutNSView: NSView {
         let canvas = coordinator.state.canvases[index]
         let screen = screenForCanvas(canvas) ?? NSScreen.main ?? cachedScreens.first!
         let engine = coordinator.snapEngine(for: screen, excluding: canvas.id)
+        let commandHeld = event.modifierFlags.contains(.command)
 
         if let handle = dragHandle {
-            let newRect = engine.snapCornerResize(
-                rect: CGRect(origin: coordinator.dragStartOrigin, size: coordinator.dragStartSize),
-                handle: handle,
-                target: screenPoint,
-                canvas: canvas
-            )
+            let newRect: CGRect
+            if commandHeld {
+                newRect = freeCornerResize(
+                    rect: CGRect(origin: coordinator.dragStartOrigin, size: coordinator.dragStartSize),
+                    handle: handle,
+                    target: screenPoint,
+                    canvas: canvas
+                )
+            } else {
+                newRect = engine.snapCornerResize(
+                    rect: CGRect(origin: coordinator.dragStartOrigin, size: coordinator.dragStartSize),
+                    handle: handle,
+                    target: screenPoint,
+                    canvas: canvas
+                )
+            }
             coordinator.state.canvases[index].frame = newRect
-            buildSnapGuides(newRect)
+            if !commandHeld { buildSnapGuides(newRect) } else { snapGuides = [] }
         } else {
             let newOrigin = CGPoint(
                 x: coordinator.dragStartOrigin.x + delta.x,
                 y: coordinator.dragStartOrigin.y + delta.y
             )
-            let newRect = CGRect(origin: newOrigin, size: canvas.frame.size)
-            let snappedRect = engine.snapRect(newRect, excluding: canvas.id)
-            coordinator.state.canvases[index].frame.origin = snappedRect.origin
-            buildSnapGuides(snappedRect)
+            if commandHeld {
+                coordinator.state.canvases[index].frame.origin = newOrigin
+                snapGuides = []
+            } else {
+                let newRect = CGRect(origin: newOrigin, size: canvas.frame.size)
+                let snappedRect = engine.snapRect(newRect, excluding: canvas.id)
+                coordinator.state.canvases[index].frame.origin = snappedRect.origin
+                buildSnapGuides(snappedRect)
+            }
         }
 
         needsDisplay = true
@@ -354,6 +370,50 @@ final class LayoutNSView: NSView {
 
     private func screenForCanvas(_ canvas: CanvasModel) -> NSScreen? {
         cachedScreens.first { $0.frame.intersects(canvas.frame) }
+    }
+
+    private func freeCornerResize(rect: CGRect, handle: ResizeHandle, target: CGPoint, canvas: CanvasModel) -> CGRect {
+        var result = rect
+        let minSize: CGFloat = 32
+
+        let ratio: CGFloat?
+        if canvas.type == .video, let size = canvas.videoConfig?.naturalSize,
+           size.width > 0, size.height > 0 {
+            ratio = size.width / size.height
+        } else {
+            ratio = nil
+        }
+
+        switch handle {
+        case .bottomRight:
+            let newW = max(target.x - rect.minX, minSize)
+            result.size = CGSize(width: newW, height: ratio != nil ? newW / ratio! : target.y - rect.minY)
+        case .bottomLeft:
+            let newW = max(rect.maxX - target.x, minSize)
+            result = CGRect(
+                x: rect.maxX - newW, y: rect.minY,
+                width: newW,
+                height: ratio != nil ? newW / ratio! : target.y - rect.minY
+            )
+        case .topRight:
+            let newW = max(target.x - rect.minX, minSize)
+            result = CGRect(
+                x: rect.minX, y: target.y,
+                width: newW,
+                height: ratio != nil ? newW / ratio! : rect.maxY - target.y
+            )
+        case .topLeft:
+            let newW = max(rect.maxX - target.x, minSize)
+            result = CGRect(
+                x: rect.maxX - newW, y: target.y,
+                width: newW,
+                height: ratio != nil ? newW / ratio! : rect.maxY - target.y
+            )
+        case .top, .bottom, .left, .right:
+            break
+        }
+
+        return result
     }
 
     private func buildSnapGuides(_ rect: CGRect) {

@@ -31,6 +31,9 @@ struct EditorView: View {
                 state.loadLastSession()
             }
         }
+        .sheet(isPresented: $state.showPresetManager) {
+            PresetManagerView(state: state)
+        }
     }
 
     private var toolbar: some View {
@@ -111,6 +114,13 @@ struct EditorView: View {
             }
             .toggleStyle(.button)
             .help("Toggle snap to grid")
+
+            Button(action: { state.showPresetManager = true }) {
+                Label("Presets", systemImage: "folder")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.bordered)
+            .help("Preset manager")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

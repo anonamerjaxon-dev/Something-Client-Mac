@@ -259,6 +259,8 @@ final class GameOfLifeProvider: MTKView, CanvasProvider {
             timer?.suspend()
             isTimerRunning = false
         }
+        timer?.cancel()
+        timer = nil
         removeFromSuperview()
     }
 
@@ -287,20 +289,12 @@ final class GameOfLifeProvider: MTKView, CanvasProvider {
             timer?.suspend()
             isTimerRunning = false
         }
-        if var config = canvas.gameOfLifeConfig {
-            config.paused = true
-            canvas.gameOfLifeConfig = config
-        }
     }
 
     func resume() {
         if !isTimerRunning {
             timer?.resume()
             isTimerRunning = true
-        }
-        if var config = canvas.gameOfLifeConfig {
-            config.paused = false
-            canvas.gameOfLifeConfig = config
         }
     }
 
