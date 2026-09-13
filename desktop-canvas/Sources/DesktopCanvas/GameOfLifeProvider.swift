@@ -90,7 +90,7 @@ fragment float4 gameOfLifeFragment(
 }
 """
 
-final class GameOfLifeProvider: MTKView, CanvasProvider {
+public final class GameOfLifeProvider: MTKView, CanvasProvider {
 
     var canvas: CanvasModel
 
@@ -105,8 +105,8 @@ final class GameOfLifeProvider: MTKView, CanvasProvider {
     private var useBufferA = true
     private var needsCompute = true
 
-    private var gridWidth: Int = 0
-    private var gridHeight: Int = 0
+    public private(set) var gridWidth: Int = 0
+    public private(set) var gridHeight: Int = 0
 
     private var timer: DispatchSourceTimer?
     private var isTimerRunning = false
@@ -224,9 +224,14 @@ final class GameOfLifeProvider: MTKView, CanvasProvider {
     private func scheduleTimer() {
         guard let config = canvas.gameOfLifeConfig else { return }
 
-        timer?.cancel()
+        if isTimerRunning {
+            timer?.cancel()
+            isTimerRunning = false
+        } else {
+            timer?.resume()
+            timer?.cancel()
+        }
         timer = nil
-        isTimerRunning = false
 
         let interval = 1.0 / max(config.generationsPerSecond, 0.1)
         let newTimer = DispatchSource.makeTimerSource(queue: timerQueue)
@@ -256,10 +261,12 @@ final class GameOfLifeProvider: MTKView, CanvasProvider {
 
     func detach() {
         if isTimerRunning {
-            timer?.suspend()
+            timer?.cancel()
             isTimerRunning = false
+        } else {
+            timer?.resume()
+            timer?.cancel()
         }
-        timer?.cancel()
         timer = nil
         removeFromSuperview()
     }
@@ -284,14 +291,15 @@ final class GameOfLifeProvider: MTKView, CanvasProvider {
         needsCompute = true
     }
 
-    func pause() {
+    public func pause() {
+        needsCompute = false
         if isTimerRunning {
             timer?.suspend()
             isTimerRunning = false
         }
     }
 
-    func resume() {
+    public func resume() {
         if !isTimerRunning {
             timer?.resume()
             isTimerRunning = true
@@ -338,6 +346,116 @@ final class GameOfLifeProvider: MTKView, CanvasProvider {
         needsCompute = true
     }
 
+    // MARK: - Grid Mutation API
+
+    private func currentBufferPtr() -> UnsafeMutablePointer<UInt8> {
+        (useBufferA ? bufferA! : bufferB!).contents().assumingMemoryBound(to: UInt8.self)
+    }
+
+    private func markDirty() {
+        if canvas.gameOfLifeConfig?.paused == true {
+            DispatchQueue.main.async { [weak self] in
+                self?.setNeedsDisplay(self?.bounds ?? .zero)
+            }
+        } else {
+            needsCompute = true
+            DispatchQueue.main.async { [weak self] in
+                self?.setNeedsDisplay(self?.bounds ?? .zero)
+            }
+        }
+    }
+
+    public func cellState(row: Int, col: Int) -> Bool {
+        guard row >= 0, row < gridHeight, col >= 0, col < gridWidth else { return false }
+        return currentBufferPtr()[row * gridWidth + col] != 0
+    }
+
+    public func setCell(row: Int, col: Int, alive: Bool) {
+        guard row >= 0, row < gridHeight, col >= 0, col < gridWidth else { return }
+        currentBufferPtr()[row * gridWidth + col] = alive ? 1 : 0
+        markDirty()
+    }
+
+    public func toggleCell(row: Int, col: Int) {
+        setCell(row: row, col: col, alive: !cellState(row: row, col: col))
+    }
+
+    public func fillRect(minRow: Int, minCol: Int, maxRow: Int, maxCol: Int, alive: Bool) {
+        let r0 = max(0, minRow)
+        let c0 = max(0, minCol)
+        let r1 = min(gridHeight - 1, maxRow)
+        let c1 = min(gridWidth - 1, maxCol)
+        guard r0 <= r1, c0 <= c1 else { return }
+
+        let ptr = currentBufferPtr()
+        let value: UInt8 = alive ? 1 : 0
+        for row in r0...r1 {
+            let base = row * gridWidth
+            for col in c0...c1 {
+                ptr[base + col] = value
+            }
+        }
+        markDirty()
+    }
+
+    public func drawLine(fromRow: Int, fromCol: Int, toRow: Int, toCol: Int, alive: Bool) {
+        var r0 = fromRow
+        var c0 = fromCol
+        let r1 = toRow
+        let c1 = toCol
+
+        let dr = abs(r1 - r0)
+        let dc = abs(c1 - c0)
+        let sr = r0 < r1 ? 1 : -1
+        let sc = c0 < c1 ? 1 : -1
+        var err = dr - dc
+
+        let ptr = currentBufferPtr()
+        let value: UInt8 = alive ? 1 : 0
+
+        while true {
+            if r0 >= 0, r0 < gridHeight, c0 >= 0, c0 < gridWidth {
+                ptr[r0 * gridWidth + c0] = value
+            }
+            if r0 == r1, c0 == c1 { break }
+            let e2 = 2 * err
+            if e2 > -dc { err -= dc; r0 += sr }
+            if e2 < dr { err += dr; c0 += sc }
+        }
+        markDirty()
+    }
+
+    public func clearAll() {
+        let total = gridWidth * gridHeight
+        memset(currentBufferPtr(), 0, total)
+        markDirty()
+    }
+
+    public func randomSeed(density: Double = 0.5) {
+        let total = gridWidth * gridHeight
+        let ptr = currentBufferPtr()
+        let clampedDensity = min(max(density, 0), 1)
+        for i in 0..<total {
+            ptr[i] = Double.random(in: 0...1) < clampedDensity ? 1 : 0
+        }
+        markDirty()
+    }
+
+    public func writeFullGrid(_ data: [UInt8]) {
+        let total = gridWidth * gridHeight
+        guard data.count == total else { return }
+        _ = data.withUnsafeBytes { buf in
+            memcpy(currentBufferPtr(), buf.baseAddress!, total)
+        }
+        markDirty()
+    }
+
+    public func gridSnapshot() -> [UInt8] {
+        let total = gridWidth * gridHeight
+        let ptr = currentBufferPtr()
+        return Array(UnsafeBufferPointer(start: ptr, count: total))
+    }
+
     // MARK: - Drawing
 
     // Override NSView.draw(_:) directly rather than conforming to MTKViewDelegate.
@@ -345,7 +463,7 @@ final class GameOfLifeProvider: MTKView, CanvasProvider {
     // delegate.draw(in:) which bypasses draw(_:) and can silently fail to fire
     // the CVDisplayLink-driven render loop.
 
-    override func draw(_ rect: CGRect) {
+    public override func draw(_ rect: CGRect) {
         guard let drawable = currentDrawable,
               let rpDesc = currentRenderPassDescriptor,
               let cmdBuf = commandQueue.makeCommandBuffer(),

@@ -34,6 +34,11 @@ struct EditorView: View {
         .sheet(isPresented: $state.showPresetManager) {
             PresetManagerView(state: state)
         }
+        .sheet(isPresented: $state.showGridEditor) {
+            if let canvasID = state.gridEditorCanvasID {
+                GridEditorView(canvasID: canvasID, state: state)
+            }
+        }
     }
 
     private var toolbar: some View {

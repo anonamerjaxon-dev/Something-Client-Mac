@@ -60,6 +60,13 @@ public final class DesktopCanvas {
         screenManager?.refresh()
     }
 
+    public func withGoLProvider(for canvasID: UUID, body: (GameOfLifeProvider) -> Void) {
+        guard let provider = screenManager?.provider(for: canvasID, as: GameOfLifeProvider.self) else {
+            return
+        }
+        body(provider)
+    }
+
     public func savePreset(_ layout: CanvasLayout, named name: String) throws {
         let url = Self.presetsDirectory().appendingPathComponent("\(name).json")
         try layout.save(to: url)

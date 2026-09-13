@@ -17,6 +17,9 @@ final class EditorState: ObservableObject {
 
     @Published var showPresetManager: Bool = false
 
+    @Published var showGridEditor: Bool = false
+    @Published var gridEditorCanvasID: UUID?
+
     var presetInfos: [PresetInfo] {
         DesktopCanvas.shared.listPresetsWithMetadata()
     }
