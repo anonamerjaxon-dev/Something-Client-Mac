@@ -144,15 +144,12 @@ struct GridEditorView: View {
                     selectedTool = tool
                     if tool != .pencil { selectedPattern = nil }
                 }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: tool.iconName)
-                        Text(tool.label)
-                            .font(.caption)
-                    }
+                    Image(systemName: tool.iconName)
                 }
                 .buttonStyle(.bordered)
                 .tint(selectedTool == tool ? .accentColor : nil)
                 .opacity(selectedTool == tool ? 1.0 : 0.5)
+                .help(tool.label)
             }
 
             Divider()
@@ -171,14 +168,14 @@ struct GridEditorView: View {
                     selectedPattern = nil
                 }
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: 3) {
                     Image(systemName: "square.grid.3x3")
-                    Text(selectedPattern?.name ?? "Patterns")
-                        .frame(maxWidth: 90)
+                    Text(selectedPattern?.name ?? "Pattern")
                         .lineLimit(1)
                 }
             }
             .buttonStyle(.bordered)
+            .frame(maxWidth: 110)
 
             Divider()
                 .frame(height: 20)
@@ -193,7 +190,7 @@ struct GridEditorView: View {
             Text("\(Int(displayZoom * 100))%")
                 .font(.caption.monospacedDigit())
                 .foregroundColor(.secondary)
-                .frame(width: 40)
+                .frame(width: 32)
 
             Button(action: { gridViewRef?.adjustZoom(2.0) }) {
                 Image(systemName: "plus.magnifyingglass")
@@ -215,13 +212,8 @@ struct GridEditorView: View {
 
             Spacer()
 
-            HStack(spacing: 4) {
-                Text("Density:")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                Slider(value: $density, in: 0.1...0.9, step: 0.05)
-                    .frame(width: 70)
-            }
+            Slider(value: $density, in: 0.1...0.9, step: 0.05)
+                .frame(width: 60)
 
             Button("Random") {
                 randomSeed()
@@ -506,7 +498,9 @@ struct GridCanvasView: NSViewRepresentable {
 
 final class GridCanvasNSView: NSView {
     var coordinator: GridCanvasView.Coordinator?
-    var grid: [UInt8] = []
+    var grid: [UInt8] = [] {
+        didSet { gridGeneration &+= 1 }
+    }
     var gridW: Int = 0
     var gridH: Int = 0
     var cellSize: Int = 8
@@ -523,7 +517,6 @@ final class GridCanvasNSView: NSView {
     private var zoomLevel: CGFloat = 8
     private var panOffset: CGPoint = .zero
     private var needsInitialFit = true
-
     private var lastHoveredCell: (row: Int, col: Int)?
     private var lastShapePreview: (r0: Int, c0: Int, r1: Int, c1: Int)?
     private var isRightDragging = false
@@ -531,6 +524,12 @@ final class GridCanvasNSView: NSView {
     private var drawStartCell: (row: Int, col: Int)?
     private var lastDrawnCell: (row: Int, col: Int)?
     private var trackingArea: NSTrackingArea?
+
+    private var cachedGridImage: CGImage?
+    private var cachedImageGeneration: Int = -1
+    private var gridGeneration: Int = 0
+    private var cachedAliveColor: NSColor?
+    private var cachedDeadColor: NSColor?
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -594,6 +593,56 @@ final class GridCanvasNSView: NSView {
         return (row, col)
     }
 
+    private func rebuildGridBitmap() {
+        guard gridW > 0, gridH > 0, grid.count >= gridW * gridH else {
+            cachedGridImage = nil
+            return
+        }
+
+        let bytesPerRow = gridW * 4
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+        guard let context = CGContext(
+            data: nil, width: gridW, height: gridH,
+            bitsPerComponent: 8, bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            cachedGridImage = nil
+            return
+        }
+
+        let aliveRGB = aliveColor.usingColorSpace(.sRGB) ?? aliveColor
+        let deadRGB = deadColor.usingColorSpace(.sRGB) ?? deadColor
+
+        let aliveR = UInt8(clamping: Int(aliveRGB.redComponent * 255))
+        let aliveG = UInt8(clamping: Int(aliveRGB.greenComponent * 255))
+        let aliveB = UInt8(clamping: Int(aliveRGB.blueComponent * 255))
+        let deadR = UInt8(clamping: Int(deadRGB.redComponent * 255))
+        let deadG = UInt8(clamping: Int(deadRGB.greenComponent * 255))
+        let deadB = UInt8(clamping: Int(deadRGB.blueComponent * 255))
+
+        let ptr = context.data!.assumingMemoryBound(to: UInt8.self)
+        for i in 0..<grid.count {
+            let offset = i &* 4
+            if grid[i] != 0 {
+                ptr[offset] = aliveR
+                ptr[offset &+ 1] = aliveG
+                ptr[offset &+ 2] = aliveB
+                ptr[offset &+ 3] = 255
+            } else {
+                ptr[offset] = deadR
+                ptr[offset &+ 1] = deadG
+                ptr[offset &+ 2] = deadB
+                ptr[offset &+ 3] = 255
+            }
+        }
+
+        cachedGridImage = context.makeImage()
+        cachedImageGeneration = gridGeneration
+        cachedAliveColor = aliveColor
+        cachedDeadColor = deadColor
+    }
+
     private func isValidCell(_ row: Int, _ col: Int) -> Bool {
         row >= 0 && row < gridH && col >= 0 && col < gridW
     }
@@ -604,6 +653,7 @@ final class GridCanvasNSView: NSView {
         let value: UInt8 = alive ? 1 : 0
         if grid[idx] != value {
             grid[idx] = value
+            gridGeneration &+= 1
         }
     }
 
@@ -793,24 +843,20 @@ final class GridCanvasNSView: NSView {
         let cellDisplaySize = CGFloat(cellSize) * zoomLevel
         let context = NSGraphicsContext.current!.cgContext
 
-        if grid.count >= gridW * gridH {
-            for row in 0..<gridH {
-                for col in 0..<gridW {
-                    let idx = row * gridW + col
-                    let isAlive = grid[idx] != 0
-                    let rect = CGRect(
-                        x: panOffset.x + CGFloat(col) * cellDisplaySize,
-                        y: panOffset.y + CGFloat(row) * cellDisplaySize,
-                        width: cellDisplaySize,
-                        height: cellDisplaySize
-                    )
+        let colorChanged = aliveColor != cachedAliveColor || deadColor != cachedDeadColor
+        if gridGeneration != cachedImageGeneration || colorChanged {
+            rebuildGridBitmap()
+        }
 
-                    if !dirtyRect.intersects(rect) { continue }
-
-                    (isAlive ? aliveColor : deadColor).setFill()
-                    context.fill(rect)
-                }
-            }
+        if let image = cachedGridImage {
+            let gridRect = CGRect(
+                x: panOffset.x,
+                y: panOffset.y,
+                width: CGFloat(gridW) * cellDisplaySize,
+                height: CGFloat(gridH) * cellDisplaySize
+            )
+            context.interpolationQuality = .none
+            context.draw(image, in: gridRect)
         }
 
         if showGridLines, cellDisplaySize >= 4 {

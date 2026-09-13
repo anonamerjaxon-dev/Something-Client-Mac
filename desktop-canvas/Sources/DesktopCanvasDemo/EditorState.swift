@@ -96,6 +96,18 @@ final class EditorState: ObservableObject {
         autoApplyIfNeeded()
     }
 
+    func setPaused(_ paused: Bool, for canvasID: UUID) {
+        guard let index = canvases.firstIndex(where: { $0.id == canvasID }),
+              var config = canvases[index].gameOfLifeConfig
+        else { return }
+        config.paused = paused
+        canvases[index].gameOfLifeConfig = config
+
+        DesktopCanvas.shared.withGoLProvider(for: canvasID) { provider in
+            paused ? provider.pause() : provider.resume()
+        }
+    }
+
     func updateSelectedFrame(_ frame: CGRect) {
         guard let id = selectedCanvasID,
               let index = canvases.firstIndex(where: { $0.id == id })
