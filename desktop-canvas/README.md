@@ -121,7 +121,25 @@ swift run DesktopCanvasTest
 - **Space-switch recovery** (Phase 11): GoL rendering resumes on MTKView visibility change
 - **Low power mode** (Phase 11): auto-detects `NSProcessInfo.isLowPowerModeEnabled`, drops fps from 60→30
 - **Background fill** (Phase 11): solid color fill behind canvases via ColorPicker in toolbar, persists with presets
+- **Rule set picker** (Phase 11): 9 preset rule sets (Conway, HighLife, Seeds, Maze, etc.) with live GPU recompute on change
+- **Bug fixes** (Phase 11): all 8 review bugs resolved — NSApp lifecycle, timer state tracking, JSON decode clamping, clipsToBounds, cell cap enforcement, AVPlayerLayer zero-frame init
 - **Single-window-per-screen** architecture (no z-ordering, no overlapping — by design)
+
+### Rule sets
+
+9 preset cellular automata rules, switchable live from settings panel:
+
+| Rule | Notation | Character |
+|---|---|---|
+| **Conway** | B3/S23 | Classic — gliders, oscillators, stable structures |
+| **HighLife** | B3,6/S23 | Like Conway + self-replicating patterns |
+| **Day & Night** | B3,6,7,8/S3,4,6,7,8 | Inversion-symmetric, same behavior when flipped |
+| **Seeds** | B2/S | Explosive chaos — nothing survives, new cells from pairs |
+| **Maze** | B3/S1,2,3,4,5 | Produces maze-like corridors |
+| **Anneal** | B4,6,7,8/S3,5,6,7,8 | Coagulating blobs and organic shapes |
+| **2×2** | B3,6/S1,2,5 | Blocky, square-based patterns |
+| **Morley** | B3,6,8/S2,4,5 | Very active, prolific glider producer |
+| **Diamoeba** | B3,5,6,7,8/S5,6,7,8 | Diamond-shaped crystalline growth |
 
 ### Known limitations
 - **MP4 codec support**: Some MP4 files use codecs that AVPlayerLayer can decode audio from but won't render video frames (the player state is `.readyToPlay` but `presentationSize` is `.zero`). Converting to MOV usually resolves this. The editor shows a "⚠ Playback failed" placeholder when this occurs.
@@ -153,6 +171,10 @@ swift run DesktopCanvasTest
 ### 6. AVFoundation async APIs, not semaphores
 **Problem:** `DispatchSemaphore.wait()` blocks the main thread while waiting for `loadTracks` completion. Deprecated property access on `AVAssetTrack` (naturalSize, preferredTransform).
 **Fix:** `loadTracks` completion handler launches a `Task { @MainActor in ... }` that awaits `track.load(.naturalSize)` and `track.load(.preferredTransform)` — fully async, no deprecation warnings.
+
+### 7. AVPlayerLayer at .zero before layout
+**Problem:** `VideoProvider.attach()` created the AVPlayerLayer at `superview.bounds` which was `.zero` during `CanvasRenderer.init`. The layer was resized in `update()` but the 0×0 window could cause decoder initialization issues.
+**Fix:** Layer frame is now derived from `canvas.frame.size` (enforced ≥ 32×32 by `CanvasModel.init`) instead of the transient superview bounds.
 
 ## License
 

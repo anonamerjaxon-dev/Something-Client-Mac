@@ -18,14 +18,19 @@ final class VideoProvider: CanvasProvider {
         self.canvas = canvas
     }
 
-    func attach(to superview: NSView, frame: NSRect) {
+    func attach(to superview: NSView, frame _: NSRect) {
         guard let config = canvas.videoConfig else { return }
         ownerView = superview
 
         let fileExists = FileManager.default.fileExists(atPath: config.videoURL.path)
 
+        let contentSize = CGSize(
+            width: max(canvas.frame.size.width, 1),
+            height: max(canvas.frame.size.height, 1)
+        )
+
         if !fileExists || config.videoURL.path.isEmpty {
-            showPlaceholder(in: superview, frame: frame)
+            showPlaceholder(in: superview, size: contentSize)
             return
         }
 
@@ -39,7 +44,7 @@ final class VideoProvider: CanvasProvider {
 
         let layer = AVPlayerLayer()
         layer.player = player
-        layer.frame = frame
+        layer.frame = CGRect(origin: .zero, size: contentSize)
         layer.videoGravity = .resizeAspectFill
         superview.layer?.addSublayer(layer)
         self.playerLayer = layer
@@ -48,7 +53,7 @@ final class VideoProvider: CanvasProvider {
             guard let self else { return }
             if item.status == .failed {
                 DispatchQueue.main.async {
-                    self.showPlaceholder(in: superview, frame: superview.bounds,
+                    self.showPlaceholder(in: superview, size: contentSize,
                                          message: "Playback failed: \(item.error?.localizedDescription ?? "unknown")")
                 }
             }
@@ -87,7 +92,7 @@ final class VideoProvider: CanvasProvider {
         }
     }
 
-    private func showPlaceholder(in superview: NSView, frame: NSRect, message: String = "Missing Video") {
+    private func showPlaceholder(in superview: NSView, size: CGSize, message: String = "Missing Video") {
         player?.pause()
         playerLayer?.removeFromSuperlayer()
         playerLayer = nil
@@ -98,7 +103,7 @@ final class VideoProvider: CanvasProvider {
             loopObserver = nil
         }
 
-        let container = NSView(frame: frame)
+        let container = NSView(frame: CGRect(origin: .zero, size: size))
         container.wantsLayer = true
         container.layer?.backgroundColor = NSColor.darkGray.cgColor
 
