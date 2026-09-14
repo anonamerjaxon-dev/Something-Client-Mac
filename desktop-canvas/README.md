@@ -35,6 +35,8 @@ desktop-canvas/
 │   │   ├── EditorView.swift    — Main window: toolbar + canvas list + settings panel
 │   │   ├── CanvasListView.swift— Canvas list with add/remove/reorder
 │   │   ├── CanvasSettingsView.swift — Settings panel: position/size, type picker, config
+│   │   ├── GridEditorView.swift — In-app grid editor: draw, patterns, zoom/pan, live sync
+│   │   ├── PresetManagerView.swift — Save/load/delete canvas layout presets
 │   │   ├── VisualLayoutView.swift — Scaled desktop preview: drag, resize, snap feedback
 │   │   ├── SnapEngine.swift    — Snap to screen edges, center, canvas edges, layout grid
 │   │   ├── ColorWell.swift     — NSColorWell bridge for SwiftUI
@@ -72,33 +74,56 @@ swift run DesktopCanvasTest
 4. **Apply to Desktop** — renders behind desktop icons, persists across Spaces
 5. **Stop** — removes all canvases from the desktop
 
+### Keyboard shortcuts
+- **P** — Pencil tool
+- **L** — Line tool
+- **R** — Rectangle tool
+- **E** — Eraser
+- **G** — Toggle grid lines
+- **Space** — Rotate selected pattern
+
+### Grid Editor
+1. **Open**: select a Game of Life canvas in the canvas list, then click "Edit Grid" in settings
+2. **Draw**: select a tool (Pencil/Line/Rectangle/Eraser), click and drag on the grid
+3. **Place patterns**: choose from 16 patterns (Glider, Blinker, Pulsar, Gosper Gun, etc.), click to place
+4. **Live sync**: cells appear instantly on the desktop canvas — no need to close the editor
+5. **Play/pause**: toggle simulation while editing to preview pattern behavior
+6. **Zoom/pan**: scroll to zoom (0.25x–32x), right-drag to pan
+7. **Rotation**: select a pattern and press Space to rotate 90° before placing
+
+### Preset Manager
+1. **Save**: click Presets → enter a name → Save — captures all canvases + positions + background color
+2. **Load**: click any saved preset to apply it to the desktop
+3. **Delete**: click the trash icon on a preset card
+4. Presets include: canvas count, last modified date, background color
+5. Stored at `~/Library/Application Support/DesktopCanvas/presets/`
+
 ### Snap helpers
 - Snap to screen edges, center, adjacent canvas edges, or grid (50pt default)
 - Hold **⌘** to temporarily disable snapping
 - **Fill Screen** button: fills the entire screen (aspect-fill for video, cell-size-snapped for GoL)
 - Video canvases are aspect-ratio locked — resizing preserves the video's natural proportions
 
-## Current state (Phase 8 complete)
+## Current state (Phases 9–11 complete)
 
 ### ✅ Working
-- Desktop-level rendering at `kCGDesktopIconWindowLevel` (behind icons, survives Spaces, Mission Control, Show Desktop)
-- Multi-screen support with hot-plug detection
-- Game of Life: Metal GPU compute, 9 rule sets, configurable cell size/colors/speed
-- Video playback: AVPlayer with seamless looping, aspect-ratio preservation, space-aware pause/resume
-- Visual layout editor with drag/resize and snap feedback
-- UUID-based state management (no index-out-of-range crashes)
-- JSON preset save/load (`_last_used.json` auto-restore)
-- Single-window-per-screen architecture (no z-ordering, no overlapping — by design)
+- **Desktop-level rendering** at `kCGDesktopIconWindowLevel` (behind icons, survives Spaces, Mission Control, Show Desktop)
+- **Multi-screen support** with hot-plug detection
+- **Game of Life**: Metal GPU compute, 9 rule sets, configurable cell size/colors/speed
+- **Video playback**: AVPlayer with seamless looping, aspect-ratio preservation, space-aware pause/resume
+- **Visual layout editor** with drag/resize and snap feedback
+- **UUID-based state management** (no index-out-of-range crashes)
+- **JSON preset save/load** with `_last_used.json` auto-restore
+- **Preset Manager UI** (Phase 9): save named presets, load, delete, metadata display (name, canvas count, modified date)
+- **Grid Editor** (Phase 10): draw cells with Pencil/Line/Rectangle/Eraser tools, place 16 patterns (Glider, Blinker, Pulsar, Gosper Gun, etc.), zoom (0.25x–32x) and pan (right-drag), pattern rotation, keyboard shortcuts (P/L/R/E/G/Space), play/pause simulation in-editor
+- **Live sync** (Phase 10): grid edits appear on desktop GoL in real-time without closing the editor
+- **Sleep/wake handling** (Phase 11): auto-pause on system sleep, auto-resume + window reorder on wake
+- **Space-switch recovery** (Phase 11): GoL rendering resumes on MTKView visibility change
+- **Low power mode** (Phase 11): auto-detects `NSProcessInfo.isLowPowerModeEnabled`, drops fps from 60→30
+- **Background fill** (Phase 11): solid color fill behind canvases via ColorPicker in toolbar, persists with presets
+- **Single-window-per-screen** architecture (no z-ordering, no overlapping — by design)
 
-### 🚧 Remaining (planned)
-- **Grid Editor** (Phase 10): draw cells directly, place patterns (glider, pulsar, etc.), zoom/pan
-- **BrushTool integration**: pencil/line/rect/fill drawing tools
-- **Pattern library**: pre-built Game of Life patterns
-- **Preset Manager UI**: save/load/delete presets from the editor
-- **Live overlay mode**: semi-transparent grid overlay on desktop
-- **More provider types**: Web/Shadertoy (WKWebView), reaction-diffusion, WireWorld
-
-### ⚠️ Known limitations
+### Known limitations
 - **MP4 codec support**: Some MP4 files use codecs that AVPlayerLayer can decode audio from but won't render video frames (the player state is `.readyToPlay` but `presentationSize` is `.zero`). Converting to MOV usually resolves this. The editor shows a "⚠ Playback failed" placeholder when this occurs.
 - **No desktop interaction**: `ignoresMouseEvents = true` always. The architecture allows adding click-through later.
 - **macOS 13+**: Requires Ventura or newer (uses modern AVFoundation async APIs).

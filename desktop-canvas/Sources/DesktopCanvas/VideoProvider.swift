@@ -135,9 +135,13 @@ final class VideoProvider: CanvasProvider {
     }
 
     func update() {
-        playerLayer?.frame = NSRect(origin: .zero, size: canvas.frame.size)
-        if let volume = canvas.videoConfig?.volume {
-            player?.volume = Float(volume)
+        let newSize = canvas.frame.size
+        if playerLayer?.frame.size != newSize {
+            playerLayer?.frame = NSRect(origin: .zero, size: newSize)
+        }
+        if let newVolume = canvas.videoConfig?.volume,
+           player?.volume != Float(newVolume) {
+            player?.volume = Float(newVolume)
         }
         if playbackDeferred, canvas.frame.size.width > 0, canvas.frame.size.height > 0 {
             playbackDeferred = false

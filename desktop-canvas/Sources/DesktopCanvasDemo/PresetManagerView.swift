@@ -8,6 +8,8 @@ struct PresetManagerView: View {
     @State private var showOverwriteAlert = false
     @State private var saveName = ""
 
+    @Environment(\.dismiss) private var dismiss
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -30,6 +32,12 @@ struct PresetManagerView: View {
             Text("\(state.presetInfos.count) saved")
                 .font(.caption)
                 .foregroundColor(.secondary)
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Close")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)

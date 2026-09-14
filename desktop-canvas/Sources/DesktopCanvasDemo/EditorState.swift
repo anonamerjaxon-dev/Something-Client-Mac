@@ -14,6 +14,7 @@ final class EditorState: ObservableObject {
     @Published var snapToScreenEdges: Bool = true
     @Published var snapToCanvasEdges: Bool = true
     @Published var margin: CGFloat = 0
+    @Published var backgroundColor: CodableColor? = nil
 
     @Published var showPresetManager: Bool = false
 
@@ -108,6 +109,59 @@ final class EditorState: ObservableObject {
         }
     }
 
+    func persistGridState(_ gridState: [[Bool]], canvasID: UUID) {
+        guard let index = canvases.firstIndex(where: { $0.id == canvasID }),
+              var config = canvases[index].gameOfLifeConfig
+        else { return }
+        config.gridState = gridState
+        canvases[index].gameOfLifeConfig = config
+    }
+
+    private func syncGridStatesFromProviders(always: Bool = false) {
+        for i in 0..<canvases.count {
+            guard canvases[i].type == .gameOfLife else { continue }
+            let canvasID = canvases[i].id
+            DesktopCanvas.shared.withGoLProvider(for: canvasID) { provider in
+                let w = provider.gridWidth
+                let h = provider.gridHeight
+
+                if !always,
+                   let existing = canvases[i].gameOfLifeConfig?.gridState,
+                   existing.count == h, existing.first?.count == w {
+                    return
+                }
+
+                let snapshot = provider.gridSnapshot()
+                var gridState: [[Bool]] = []
+                gridState.reserveCapacity(h)
+                for row in 0..<h {
+                    let base = row * w
+                    let rowData = snapshot[base..<base + w].map { $0 != 0 }
+                    gridState.append(rowData)
+                }
+                canvases[i].gameOfLifeConfig?.gridState = gridState
+            }
+        }
+    }
+
+    func randomSeed(by canvasID: UUID, density: Double) {
+        guard let index = canvases.firstIndex(where: { $0.id == canvasID }),
+              var config = canvases[index].gameOfLifeConfig
+        else { return }
+        config.gridState = nil
+        canvases[index].gameOfLifeConfig = config
+
+        DesktopCanvas.shared.withGoLProvider(for: canvasID) { provider in
+            provider.randomSeed(density: density)
+        }
+    }
+
+    func clearAll(by canvasID: UUID) {
+        DesktopCanvas.shared.withGoLProvider(for: canvasID) { provider in
+            provider.clearAll()
+        }
+    }
+
     func updateSelectedFrame(_ frame: CGRect) {
         guard let id = selectedCanvasID,
               let index = canvases.firstIndex(where: { $0.id == id })
@@ -191,8 +245,12 @@ final class EditorState: ObservableObject {
     }
 
     func applyToDesktop() {
-        let layout = CanvasLayout(name: "Current", canvases: canvases)
+        syncGridStatesFromProviders(always: true)
+
+        let layout = CanvasLayout(name: "Current", canvases: canvases, backgroundColor: backgroundColor)
         let result = DesktopCanvas.shared.apply(layout: layout)
+
+        syncGridStatesFromProviders()
 
         switch result {
         case .ok:
@@ -220,8 +278,9 @@ final class EditorState: ObservableObject {
         applyWorkItem?.cancel()
         let item = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            let layout = CanvasLayout(name: "Current", canvases: self.canvases)
-            DesktopCanvas.shared.apply(layout: layout)
+            let layout = CanvasLayout(name: "Current", canvases: self.canvases, backgroundColor: self.backgroundColor)
+            DesktopCanvas.shared.refresh(with: layout)
+            self.syncGridStatesFromProviders()
         }
         applyWorkItem = item
         DispatchQueue.main.async(execute: item)
@@ -371,7 +430,7 @@ final class EditorState: ObservableObject {
         }
         let dir = DesktopCanvas.presetsDirectory()
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let layout = CanvasLayout(name: name, canvases: canvases)
+        let layout = CanvasLayout(name: name, canvases: canvases, backgroundColor: backgroundColor)
         do {
             try DesktopCanvas.shared.savePreset(layout, named: name)
             setStatus("Saved preset: \"\(name)\"", type: .info)

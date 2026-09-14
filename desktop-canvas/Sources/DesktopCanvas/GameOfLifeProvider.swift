@@ -110,7 +110,9 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
 
     private var timer: DispatchSourceTimer?
     private var isTimerRunning = false
+    private var lastGenerationsPerSecond: Double?
     private let timerQueue: DispatchQueue
+    private var powerStateObserver: NSObjectProtocol?
 
     init(canvas: CanvasModel) {
         self.canvas = canvas
@@ -122,6 +124,7 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
         super.init(frame: safeFrame, device: device)
         setupMetal()
         setupGrid()
+        observePowerState()
     }
 
     static func clampedFrame(_ frame: CGRect) -> CGRect {
@@ -152,7 +155,7 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
 
         framebufferOnly = false
         clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
-        preferredFramesPerSecond = 60
+        preferredFramesPerSecond = preferredFPS()
 
         let library = try! device.makeLibrary(source: metalShaderSource, options: nil)
 
@@ -173,6 +176,20 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
         depthState = device.makeDepthStencilState(descriptor: depthDesc)
 
         commandQueue = device.makeCommandQueue()!
+    }
+
+    private func preferredFPS() -> Int {
+        ProcessInfo.processInfo.isLowPowerModeEnabled ? 30 : 60
+    }
+
+    private func observePowerState() {
+        powerStateObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name.NSProcessInfoPowerStateDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.preferredFramesPerSecond = self?.preferredFPS() ?? 60
+        }
     }
 
     // MARK: - Grid Setup
@@ -201,17 +218,20 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
 
         let bufAPtr = bufferA.contents().assumingMemoryBound(to: UInt8.self)
 
-        if let gridState = config.gridState {
+        if let gridState = config.gridState,
+           gridState.count == gridHeight,
+           gridState.first?.count == gridWidth {
             for row in 0..<gridHeight {
-                let stateRow = row < gridState.count ? gridState[row] : []
+                let stateRow = gridState[row]
                 for col in 0..<gridWidth {
                     let idx = row * gridWidth + col
-                    bufAPtr[idx] = (col < stateRow.count && stateRow[col]) ? 1 : 0
+                    bufAPtr[idx] = stateRow[col] ? 1 : 0
                 }
             }
         } else {
+            arc4random_buf(bufAPtr, totalCells)
             for i in 0..<totalCells {
-                bufAPtr[i] = UInt8.random(in: 0...1)
+                bufAPtr[i] &= 1
             }
         }
 
@@ -224,6 +244,18 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
     private func scheduleTimer() {
         guard let config = canvas.gameOfLifeConfig else { return }
 
+        let newGSP = max(config.generationsPerSecond, 0.1)
+
+        if lastGenerationsPerSecond == newGSP && timer != nil {
+            if !config.paused && !isTimerRunning {
+                timer?.resume()
+                isTimerRunning = true
+            }
+            return
+        }
+
+        lastGenerationsPerSecond = newGSP
+
         if isTimerRunning {
             timer?.cancel()
             isTimerRunning = false
@@ -233,7 +265,7 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
         }
         timer = nil
 
-        let interval = 1.0 / max(config.generationsPerSecond, 0.1)
+        let interval = 1.0 / newGSP
         let newTimer = DispatchSource.makeTimerSource(queue: timerQueue)
         newTimer.schedule(deadline: .now() + interval, repeating: interval, leeway: .nanoseconds(0))
         newTimer.setEventHandler { [weak self] in
@@ -260,6 +292,10 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
     }
 
     func detach() {
+        if let observer = powerStateObserver {
+            NotificationCenter.default.removeObserver(observer)
+            powerStateObserver = nil
+        }
         if isTimerRunning {
             timer?.cancel()
             isTimerRunning = false
@@ -283,7 +319,8 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
 
         self.frame = Self.clampedFrame(canvas.frame)
 
-        if newGridWidth != gridWidth || newGridHeight != gridHeight {
+        let dimensionsChanged = newGridWidth != gridWidth || newGridHeight != gridHeight
+        if dimensionsChanged {
             reallocateGrid(width: newGridWidth, height: newGridHeight)
         }
 
@@ -325,15 +362,30 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
         let newPtrA = newBufferA.contents().assumingMemoryBound(to: UInt8.self)
         let oldPtrA = oldBufA.contents().assumingMemoryBound(to: UInt8.self)
 
-        for row in 0..<height {
-            for col in 0..<width {
-                let newIdx = row * width + col
-                if row < oldHeight && col < oldWidth {
-                    let oldIdx = row * oldWidth + col
-                    newPtrA[newIdx] = oldPtrA[oldIdx]
-                } else {
-                    newPtrA[newIdx] = UInt8.random(in: 0...1)
+        let copyRowCount = min(height, oldHeight)
+        let copyColCount = min(width, oldWidth)
+
+        for row in 0..<copyRowCount {
+            let newRowPtr = newPtrA.advanced(by: row * width)
+            let oldRowPtr = oldPtrA.advanced(by: row * oldWidth)
+            memcpy(newRowPtr, oldRowPtr, copyColCount)
+
+            if width > oldWidth {
+                let extraStart = newRowPtr.advanced(by: oldWidth)
+                let extraCount = width - oldWidth
+                arc4random_buf(extraStart, extraCount)
+                for i in 0..<extraCount {
+                    extraStart[i] &= 1
                 }
+            }
+        }
+
+        if height > oldHeight {
+            let remainingStart = newPtrA.advanced(by: oldHeight * width)
+            let remainingCount = (height - oldHeight) * width
+            arc4random_buf(remainingStart, remainingCount)
+            for i in 0..<remainingCount {
+                remainingStart[i] &= 1
             }
         }
 
@@ -435,8 +487,18 @@ public final class GameOfLifeProvider: MTKView, CanvasProvider {
         let total = gridWidth * gridHeight
         let ptr = currentBufferPtr()
         let clampedDensity = min(max(density, 0), 1)
-        for i in 0..<total {
-            ptr[i] = Double.random(in: 0...1) < clampedDensity ? 1 : 0
+        let threshold = UInt8(clampedDensity * 255)
+
+        let chunkSize = 4096
+        var randomBuffer = [UInt8](repeating: 0, count: chunkSize)
+        var offset = 0
+        while offset < total {
+            let remaining = min(chunkSize, total - offset)
+            arc4random_buf(&randomBuffer, remaining)
+            for i in 0..<remaining {
+                ptr[offset + i] = randomBuffer[i] < threshold ? 1 : 0
+            }
+            offset += remaining
         }
         markDirty()
     }

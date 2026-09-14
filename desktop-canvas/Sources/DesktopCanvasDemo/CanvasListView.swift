@@ -30,7 +30,7 @@ struct CanvasListView: View {
 
     private var addGoLButton: some View {
         Button(action: state.addGameOfLifeCanvas) {
-            Image(systemName: "circle.grid.3x3")
+            Image(systemName: "circle.grid.cross")
         }
         .buttonStyle(.borderless)
         .help("Add Game of Life canvas")
@@ -76,7 +76,7 @@ struct CanvasRowView: View {
 
     private var iconName: String {
         switch canvas.type {
-        case .gameOfLife: return "circle.grid.3x3"
+        case .gameOfLife: return "circle.grid.cross"
         case .video: return "play.rectangle"
         }
     }

@@ -5,10 +5,27 @@ import UniformTypeIdentifiers
 struct CanvasSettingsView: View {
     @ObservedObject var state: EditorState
 
+    @State private var cellSizeSliderValue: Double = 8
+    @State private var speedSliderValue: Double = 30
+    @State private var volumeSliderValue: Double = 0
+
     var body: some View {
-        if let id = state.selectedCanvasID,
-           let canvas = state.canvases.first(where: { $0.id == id }) {
-            settingsContent(canvasID: canvas.id, canvas: canvas)
+        Group {
+            if let id = state.selectedCanvasID,
+               let canvas = state.canvases.first(where: { $0.id == id }) {
+                settingsContent(canvasID: canvas.id, canvas: canvas)
+            }
+        }
+        .onChange(of: state.selectedCanvasID) { newID in
+            if let id = newID,
+               let config = state.canvases.first(where: { $0.id == id })?.gameOfLifeConfig {
+                cellSizeSliderValue = Double(config.cellSize)
+                speedSliderValue = config.generationsPerSecond
+            }
+            if let id = newID,
+               let config = state.canvases.first(where: { $0.id == id })?.videoConfig {
+                volumeSliderValue = config.volume
+            }
         }
     }
 
@@ -132,25 +149,23 @@ struct CanvasSettingsView: View {
 
     private func cellSizeControl(canvasID: UUID) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Cell Size: \(golConfig(by: canvasID).cellSize) pt").font(.caption)
-            Slider(value: Binding(
-                get: { Double(golConfig(by: canvasID).cellSize) },
-                set: { newValue in
-                    state.mutateGoLConfig(by: canvasID) { $0.cellSize = Int(newValue) }
+            Text("Cell Size: \(Int(cellSizeSliderValue)) pt").font(.caption)
+            Slider(value: $cellSizeSliderValue, in: 2...64, step: 1) { editing in
+                if !editing {
+                    state.mutateGoLConfig(by: canvasID) { $0.cellSize = Int(cellSizeSliderValue) }
                 }
-            ), in: 2...64, step: 1)
+            }
         }
     }
 
     private func speedControl(canvasID: UUID) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Speed: \(Int(golConfig(by: canvasID).generationsPerSecond)) gen/s").font(.caption)
-            Slider(value: Binding(
-                get: { golConfig(by: canvasID).generationsPerSecond },
-                set: { newValue in
-                    state.mutateGoLConfig(by: canvasID) { $0.generationsPerSecond = newValue }
+            Text("Speed: \(Int(speedSliderValue)) gen/s").font(.caption)
+            Slider(value: $speedSliderValue, in: 1...60, step: 1) { editing in
+                if !editing {
+                    state.mutateGoLConfig(by: canvasID) { $0.generationsPerSecond = speedSliderValue }
                 }
-            ), in: 1...60, step: 1)
+            }
         }
     }
 
@@ -208,18 +223,21 @@ struct CanvasSettingsView: View {
     }
 
     private func seedClearButtons(canvasID: UUID, canvas: CanvasModel) -> some View {
-        HStack(spacing: 8) {
-            Button("Random Seed") {
-                state.mutateGoLConfig(by: canvasID) { $0.gridState = nil }
-            }
-            Button("Clear") {
-                let cellSize = golConfig(by: canvasID).cellSize
-                let cols = max(1, Int(floor(canvas.frame.width / CGFloat(cellSize))))
-                let rows = max(1, Int(floor(canvas.frame.height / CGFloat(cellSize))))
-                state.mutateGoLConfig(by: canvasID) {
-                    $0.gridState = Array(repeating: Array(repeating: false, count: cols), count: rows)
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Button("Random Seed") {
+                    state.randomSeed(by: canvasID, density: 0.5)
+                }
+                Button("Clear") {
+                    state.clearAll(by: canvasID)
                 }
             }
+            Button("Edit Grid") {
+                state.gridEditorCanvasID = canvasID
+                state.showGridEditor = true
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
         }
     }
 
@@ -227,7 +245,7 @@ struct CanvasSettingsView: View {
         Toggle("Paused", isOn: Binding(
             get: { golConfig(by: canvasID).paused },
             set: { newValue in
-                state.mutateGoLConfig(by: canvasID) { $0.paused = newValue }
+                state.setPaused(newValue, for: canvasID)
             }
         ))
     }
@@ -277,13 +295,12 @@ struct CanvasSettingsView: View {
 
     private func volumeControl(canvasID: UUID) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Volume: \(Int(videoConfig(by: canvasID).volume * 100))%").font(.caption)
-            Slider(value: Binding(
-                get: { videoConfig(by: canvasID).volume },
-                set: { newValue in
-                    state.mutateVideoConfig(by: canvasID) { $0.volume = newValue }
+            Text("Volume: \(Int(volumeSliderValue * 100))%").font(.caption)
+            Slider(value: $volumeSliderValue, in: 0...1) { editing in
+                if !editing {
+                    state.mutateVideoConfig(by: canvasID) { $0.volume = volumeSliderValue }
                 }
-            ), in: 0...1)
+            }
         }
     }
 

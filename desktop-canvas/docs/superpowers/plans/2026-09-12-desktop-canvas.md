@@ -5,34 +5,14 @@
 
 ---
 
-## Phase 1: Package scaffold & models
+## Phase 1: Package scaffold & models ✅ DONE (2026-09-12)
 
-- [ ] 1.1 Create `desktop-canvas/Package.swift`
-  - Swift 5.9, macOS 13+, target `DesktopCanvas` (library) + `DesktopCanvasDemo` (executable)
-  - Dependencies: none (Metal, AVFoundation, AppKit are system frameworks)
-- [ ] 1.2 Create `Sources/DesktopCanvas/` with empty entry file
-- [ ] 1.3 Create `Sources/DesktopCanvas/CanvasLayout.swift`
-  - `CanvasLayout` struct: `name: String`, `canvases: [Canvas]`, `Codable`
-  - `static func load(from url: URL) throws -> CanvasLayout`
-  - `func save(to url: URL) throws`
-- [ ] 1.4 Create `Sources/DesktopCanvas/Canvas.swift`
-  - `Canvas` struct: `id: UUID`, `type: CanvasType`, `frame: CGRect`, configs, `Codable`, `Identifiable`
-  - `CanvasType` enum: `.gameOfLife`, `.video`
-  - `GameOfLifeConfig` struct: all fields from spec, `Codable`
-  - `VideoConfig` struct: all fields from spec, `Codable`
-  - `CodableColor` helper (serialize NSColor/Color as RGBA components)
-- [ ] 1.5 Create `Sources/DesktopCanvas/RuleSet.swift`
-  - `RuleSet` struct: `name`, `birth: Set<Int>`, `survival: Set<Int>`, `Codable`, `Equatable`
-  - `static let presets: [RuleSet]` — all 9 presets + custom
-  - `init?(bSNotation: String)` — parse `"B3/S23"` string, return nil on invalid
-  - `var bSNotation: String` — format back to string
-- [ ] 1.6 Create `Sources/DesktopCanvas/BrushTool.swift`
-  - `BrushTool` enum: `.pencil`, `.line`, `.rect`, `.fill`, `.random`
-  - `func apply(to grid: inout [[Bool]], from start: Point, to end: Point, …)` for each tool
-  - Flood fill algorithm (BFS/DFS) for `.fill`
-  - Bresenham line algorithm for `.line`
-  - Rectangle fill for `.rect`
-  - Random seed at density for `.random`
+- [x] 1.1 `Package.swift` — Swift 5.9, macOS 13+, links AppKit/Metal/AVFoundation/QuartzCore
+- [x] 1.2 `Sources/DesktopCanvas/` directory created
+- [x] 1.3 `CanvasLayout.swift` — Codable, load/save from JSON
+- [x] 1.4 `Canvas.swift` — Canvas (Codable via [Double] array for CGRect + 32×32 min), CanvasType, GameOfLifeConfig, VideoConfig. `CodableColor` in separate file (raw RGBA, no NSColor/Color dependency).
+- [x] 1.5 `RuleSet.swift` — 9 presets, B3/S23 parser, bSNotation formatter
+- [~] 1.6 `BrushTool.swift` — **DEFERRED to Phase 10** (only used by grid editor)
 
 ---
 
@@ -87,33 +67,18 @@
 
 ---
 
-## Phase 5: Desktop window & screen management
+## Phase 5: Desktop window & screen management ✅ DONE (2026-09-12)
 
-- [ ] 5.1 Create `Sources/DesktopCanvas/CanvasWindow.swift`
-  - `CanvasWindow: NSWindow` subclass
-  - Init: `NSWindow(contentRect:screen.frame, styleMask: [.borderless], …)`
-  - Properties: `level = CGWindowLevelForKey(.desktopIconWindow) - 1`,
-    `ignoresMouseEvents = true`, `hasShadow = false`,
-    `backgroundColor = .clear`, `isOpaque = false`
-  - `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`
-  - Content view is a plain `NSView`; canvases are added as subviews
-  - `func layoutCanvases(_ canvases: [Canvas])` — positions/sizes subviews
-    to match each canvas frame, creates/destroys subviews as needed
-- [ ] 5.2 Create `Sources/DesktopCanvas/ScreenManager.swift`
-  - Owns one `CanvasWindow` per active `NSScreen`
-  - Listen to `NSApplication.didChangeScreenParametersNotification`
-  - On display added: create new `CanvasWindow` for that screen
-  - On display removed: close that screen's window, preserve canvases in model
-  - Re-layout all canvases across all windows on any change
-- [ ] 5.3 Create `Sources/DesktopCanvas/DesktopCanvas.swift`
-  - `static let shared = DesktopCanvas()`
-  - `func apply(layout: CanvasLayout)` — creates ScreenManager, applies layout
-  - `func stop()` — tears down ScreenManager, stops all providers
-  - `func refresh()` — re-layout canvases (e.g., after editor changes a frame)
-  - `static func presetsDirectory() -> URL`
-  - `static func lastUsedPresetURL() -> URL`
-  - `static func saveLastUsedPreset(_ layout: CanvasLayout)`
-  - `static func loadLastUsedPreset() -> CanvasLayout?`
+- [x] 5.1 `CanvasWindow.swift` — NSWindow at `kCGDesktopIconWindowLevel` raw (no offset), `.canJoinAllSpaces/.fullScreenAuxiliary/.stationary/.transient/.ignoresCycle` (proven S0.1 config), factory pattern creates providers by type, diff-based layoutCanvases
+- [x] 5.2 `ScreenManager.swift` — one CanvasWindow per NSScreen, `didChangeScreenParametersNotification` for hot-plug, `.accessory` activation policy (no Dock, can receive notifications)
+- [x] 5.3 `DesktopCanvas.swift` — singleton, `apply`/`stop`/`refresh`, 10M cell soft cap, auto-saves `_last_used.json` to `~/Library/Application Support/DesktopCanvas/presets/`
+
+**Decisions made during implementation (deviations from original spec):**
+- Window level: raw `CGWindowLevelForKey(.desktopIconWindow)` — NOT `- 1`. S0.1 spike proved `- 1` is unnecessary.
+- Collection behavior: added `.stationary`, `.transient`, `.ignoresCycle` from spike. `.stationary` + `.canJoinAllSpaces` work together: stationary prevents z-order fights, canJoinAllSpaces mirrors the window on every Space.
+- Activation policy: `.accessory` (not `.prohibited`) — need to receive display-change notifications for hot-plug.
+- Factory pattern: `CanvasWindow.layoutCanvases` creates providers, not the caller.
+- Self-contained NSApplication: `ScreenManager.apply()` calls `NSApp.run()` if not running.
 
 ---
 

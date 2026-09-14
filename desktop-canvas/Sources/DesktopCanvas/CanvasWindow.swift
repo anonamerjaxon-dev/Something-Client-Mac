@@ -30,7 +30,51 @@ final class CanvasWindow: NSWindow {
         contentView?.wantsLayer = true
         contentView?.layer?.backgroundColor = .clear
 
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleOcclusionChange),
+            name: NSWindow.didChangeOcclusionStateNotification,
+            object: self
+        )
+
         self.order(.below, relativeTo: 0)
+    }
+
+    @objc private func handleOcclusionChange() {
+        if occlusionState.contains(.visible) {
+            contentView?.setNeedsDisplay(contentView?.bounds ?? .zero)
+        }
+    }
+
+    func provider<T>(for canvasID: UUID, as type: T.Type) -> T? {
+        providers[canvasID] as? T
+    }
+
+    func pauseAllProviders() {
+        for provider in providers.values {
+            provider.pause()
+        }
+    }
+
+    func resumeAllProviders() {
+        for provider in providers.values {
+            provider.resume()
+        }
+    }
+
+    func reorderToDesktop() {
+        self.order(.below, relativeTo: 0)
+        contentView?.setNeedsDisplay(contentView?.bounds ?? .zero)
+    }
+
+    func setBackgroundColor(_ color: NSColor?) {
+        guard let color else {
+            backgroundColor = .clear
+            contentView?.layer?.backgroundColor = .clear
+            return
+        }
+        backgroundColor = color
+        contentView?.layer?.backgroundColor = color.cgColor
     }
 
     func layoutCanvases(_ canvases: [CanvasModel]) {
@@ -46,6 +90,21 @@ final class CanvasWindow: NSWindow {
             renderers[id]?.removeFromSuperview()
             renderers[id] = nil
             providers[id] = nil
+        }
+
+        for canvas in canvases {
+            guard let existing = renderers[canvas.id],
+                  let provider = providers[canvas.id] else { continue }
+            let typeChanged: Bool = switch canvas.type {
+            case .gameOfLife: !(provider is GameOfLifeProvider)
+            case .video: !(provider is VideoProvider)
+            }
+            if typeChanged {
+                provider.detach()
+                existing.removeFromSuperview()
+                renderers[canvas.id] = nil
+                providers[canvas.id] = nil
+            }
         }
 
         for canvas in canvases where renderers[canvas.id] == nil {

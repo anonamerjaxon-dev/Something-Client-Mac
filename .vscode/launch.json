@@ -159,6 +159,46 @@
             "target": "PermissionsTest",
             "configuration": "release",
             "preLaunchTask": "swift: Build Release PermissionsTest (desktop-canvas/Spike/PermissionsTest)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/desktop-canvas",
+            "name": "Debug DesktopCanvasTest (desktop-canvas)",
+            "target": "DesktopCanvasTest",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug DesktopCanvasTest (desktop-canvas)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/desktop-canvas",
+            "name": "Release DesktopCanvasTest (desktop-canvas)",
+            "target": "DesktopCanvasTest",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release DesktopCanvasTest (desktop-canvas)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/desktop-canvas",
+            "name": "Debug DesktopCanvasDemo (desktop-canvas)",
+            "target": "DesktopCanvasDemo",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug DesktopCanvasDemo (desktop-canvas)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:something client mac}/desktop-canvas",
+            "name": "Release DesktopCanvasDemo (desktop-canvas)",
+            "target": "DesktopCanvasDemo",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release DesktopCanvasDemo (desktop-canvas)"
         }
     ]
 }

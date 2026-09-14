@@ -1,4 +1,5 @@
 import SwiftUI
+import DesktopCanvas
 
 struct EditorView: View {
     @StateObject private var state = EditorState()
@@ -25,7 +26,7 @@ struct EditorView: View {
             statusBar
                 .frame(height: 28)
         }
-        .frame(minWidth: 700, minHeight: 450)
+        .frame(minWidth: 800, minHeight: 550)
         .onAppear {
             if state.canvases.isEmpty {
                 state.loadLastSession()
@@ -73,7 +74,7 @@ struct EditorView: View {
 
             Menu {
                 Button(action: state.addGameOfLifeCanvas) {
-                    Label("Game of Life", systemImage: "circle.grid.3x3")
+                    Label("Game of Life", systemImage: "circle.grid.cross")
                 }
                 Button(action: state.addVideoCanvas) {
                     Label("Video", systemImage: "play.rectangle")
@@ -97,7 +98,7 @@ struct EditorView: View {
                 .padding(.horizontal, 2)
 
             Button(action: state.fillScreen) {
-                Label("Fill Screen", systemImage: "rectangle.inset.filled")
+                Label("Fill Screen", systemImage: "rectangle.portrait.arrowtriangle.2.outward")
                     .labelStyle(.iconOnly)
             }
             .buttonStyle(.bordered)
@@ -105,7 +106,7 @@ struct EditorView: View {
             .help("Fill canvas to screen size")
 
             Button(action: state.centerCanvas) {
-                Label("Center", systemImage: "rectangle.center.inset.filled")
+                Label("Center", systemImage: "crop")
                     .labelStyle(.iconOnly)
             }
             .buttonStyle(.bordered)
@@ -126,6 +127,23 @@ struct EditorView: View {
             }
             .buttonStyle(.bordered)
             .help("Preset manager")
+
+            Divider()
+                .frame(height: 20)
+                .padding(.horizontal, 2)
+
+            ColorPicker("Background", selection: backgroundColorBinding)
+                .labelsHidden()
+                .frame(width: 28)
+
+            if state.backgroundColor != nil {
+                Button(action: { state.backgroundColor = nil }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Remove background fill")
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -188,6 +206,28 @@ struct EditorView: View {
 
     private var statusBarBackground: Color {
         Color(nsColor: .controlBackgroundColor)
+    }
+
+    private var backgroundColorBinding: Binding<Color> {
+        Binding<Color>(
+            get: {
+                if let bg = state.backgroundColor {
+                    Color(nsColor: bg.nsColor)
+                } else {
+                    Color.clear
+                }
+            },
+            set: { newColor in
+                if let resolved = NSColor(newColor).usingColorSpace(.sRGB) {
+                    state.backgroundColor = CodableColor(
+                        red: Double(resolved.redComponent),
+                        green: Double(resolved.greenComponent),
+                        blue: Double(resolved.blueComponent),
+                        alpha: 1.0
+                    )
+                }
+            }
+        )
     }
 
     private var readyLabel: String {

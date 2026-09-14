@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 public struct CodableColor: Codable, Equatable {
     public var red: Double
@@ -11,6 +12,10 @@ public struct CodableColor: Codable, Equatable {
         self.green = green
         self.blue = blue
         self.alpha = alpha
+    }
+
+    public var nsColor: NSColor {
+        NSColor(red: red, green: green, blue: blue, alpha: alpha)
     }
 
     public static let black = CodableColor(red: 0, green: 0, blue: 0)

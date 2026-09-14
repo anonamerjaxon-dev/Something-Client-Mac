@@ -3,10 +3,12 @@ import Foundation
 public struct CanvasLayout: Codable {
     public var name: String
     public var canvases: [CanvasModel]
+    public var backgroundColor: CodableColor?
 
-    public init(name: String, canvases: [CanvasModel]) {
+    public init(name: String, canvases: [CanvasModel], backgroundColor: CodableColor? = nil) {
         self.name = name
         self.canvases = canvases
+        self.backgroundColor = backgroundColor
     }
 
     public static func load(from url: URL) throws -> CanvasLayout {

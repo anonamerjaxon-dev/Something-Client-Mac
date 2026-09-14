@@ -56,8 +56,8 @@ public final class DesktopCanvas {
         screenManager = nil
     }
 
-    public func refresh() {
-        screenManager?.refresh()
+    public func refresh(with layout: CanvasLayout? = nil) {
+        screenManager?.refresh(with: layout)
     }
 
     public func withGoLProvider(for canvasID: UUID, body: (GameOfLifeProvider) -> Void) {

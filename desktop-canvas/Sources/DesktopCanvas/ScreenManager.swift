@@ -4,6 +4,8 @@ final class ScreenManager {
     private(set) var windows: [NSScreen: CanvasWindow] = [:]
     private var layout: CanvasLayout?
     private var displayObserver: NSObjectProtocol?
+    private var sleepObserver: NSObjectProtocol?
+    private var wakeObserver: NSObjectProtocol?
 
     func applyEmbedded(layout: CanvasLayout) {
         self.layout = layout
@@ -21,12 +23,44 @@ final class ScreenManager {
         ) { [weak self] _ in
             self?.handleScreenChange()
         }
+
+        let workspace = NSWorkspace.shared.notificationCenter
+
+        sleepObserver = workspace.addObserver(
+            forName: NSWorkspace.willSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            for (_, window) in self?.windows ?? [:] {
+                window.pauseAllProviders()
+            }
+        }
+
+        wakeObserver = workspace.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            for (_, window) in self.windows {
+                window.reorderToDesktop()
+                window.resumeAllProviders()
+            }
+        }
     }
 
     func stop() {
         if let observer = displayObserver {
             NotificationCenter.default.removeObserver(observer)
             displayObserver = nil
+        }
+        if let observer = sleepObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            sleepObserver = nil
+        }
+        if let observer = wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            wakeObserver = nil
         }
 
         for (_, window) in windows {
@@ -35,8 +69,18 @@ final class ScreenManager {
         windows.removeAll()
     }
 
-    func refresh() {
-        guard let layout = layout else { return }
+    func provider<T>(for canvasID: UUID, as type: T.Type) -> T? {
+        for (_, window) in windows {
+            if let provider = window.provider(for: canvasID, as: type) {
+                return provider
+            }
+        }
+        return nil
+    }
+
+    func refresh(with layout: CanvasLayout? = nil) {
+        if let layout { self.layout = layout }
+        guard let layout = self.layout else { return }
         for (_, window) in windows {
             window.layoutCanvases(layout.canvases)
         }
@@ -45,6 +89,7 @@ final class ScreenManager {
     private func createWindow(for screen: NSScreen) {
         guard let layout = layout else { return }
         let window = CanvasWindow(screen: screen)
+        window.setBackgroundColor(layout.backgroundColor?.nsColor)
         window.layoutCanvases(layout.canvases)
         windows[screen] = window
     }

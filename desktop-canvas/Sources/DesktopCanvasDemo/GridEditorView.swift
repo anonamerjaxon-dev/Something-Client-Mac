@@ -10,7 +10,7 @@ enum DrawTool: String, CaseIterable {
     var iconName: String {
         switch self {
         case .pencil: return "pencil"
-        case .line: return "scribble"
+        case .line: return "pencil.line"
         case .rectangle: return "rectangle"
         case .eraser: return "eraser"
         }
@@ -98,6 +98,21 @@ struct Pattern: Identifiable {
     ]
 }
 
+extension Pattern {
+    func rotated(by turns: Int) -> [(row: Int, col: Int)] {
+        let r = ((turns % 4) + 4) % 4
+        if r == 0 { return cells }
+        let maxR = cells.map(\.row).max() ?? 0
+        let maxC = cells.map(\.col).max() ?? 0
+        switch r {
+        case 1: return cells.map { (row: $0.col, col: maxR - $0.row) }
+        case 2: return cells.map { (row: maxR - $0.row, col: maxC - $0.col) }
+        case 3: return cells.map { (row: maxC - $0.col, col: $0.row) }
+        default: return cells
+        }
+    }
+}
+
 struct GridEditorView: View {
     let canvasID: UUID
     @ObservedObject var state: EditorState
@@ -116,6 +131,9 @@ struct GridEditorView: View {
     @State private var shapePreview: (r0: Int, c0: Int, r1: Int, c1: Int)?
     @State private var displayZoom: CGFloat = 8
     @State private var gridViewRef: GridCanvasNSView?
+    @State private var patternRotation: Int = 0
+    @State private var isPlaying = false
+    @State private var keyEventMonitor: Any?
 
     @Environment(\.dismiss) private var dismiss
 
@@ -131,9 +149,43 @@ struct GridEditorView: View {
             Divider()
             statusBar
         }
-        .frame(minWidth: 680, idealWidth: 800, minHeight: 480, idealHeight: 600)
-        .onAppear(perform: loadGridState)
-        .onDisappear(perform: flushAndResume)
+        .frame(minWidth: 1000, idealWidth: 1400, minHeight: 700, idealHeight: 1000)
+        .onAppear {
+            loadGridState()
+            keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                switch event.keyCode {
+                case 49:
+                    DispatchQueue.main.async {
+                        patternRotation = (patternRotation + 1) % 4
+                    }
+                    return nil
+                case 35:
+                    DispatchQueue.main.async { selectedTool = .pencil; selectedPattern = nil }
+                    return nil
+                case 37:
+                    DispatchQueue.main.async { selectedTool = .line; selectedPattern = nil }
+                    return nil
+                case 15:
+                    DispatchQueue.main.async { selectedTool = .rectangle; selectedPattern = nil }
+                    return nil
+                case 14:
+                    DispatchQueue.main.async { selectedTool = .eraser; selectedPattern = nil }
+                    return nil
+                case 5:
+                    DispatchQueue.main.async { showGridLines.toggle() }
+                    return nil
+                default:
+                    break
+                }
+                return event
+            }
+        }
+        .onDisappear {
+            if let monitor = keyEventMonitor {
+                NSEvent.removeMonitor(monitor)
+            }
+            flushAndResume()
+        }
         .onExitCommand(perform: { dismiss() })
     }
 
@@ -177,6 +229,19 @@ struct GridEditorView: View {
             .buttonStyle(.bordered)
             .frame(maxWidth: 110)
 
+            if selectedPattern != nil {
+                Button(action: { patternRotation = (patternRotation + 1) % 4 }) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.bordered)
+                .help("Rotate pattern (Space)")
+
+                Text(rotationLabel)
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(.secondary)
+                    .frame(width: 28)
+            }
+
             Divider()
                 .frame(height: 20)
                 .padding(.horizontal, 2)
@@ -199,7 +264,7 @@ struct GridEditorView: View {
             .help("Zoom In")
 
             Button(action: { gridViewRef?.resetView() }) {
-                Image(systemName: "arrow.up.left.and.down.right.magnifyingglass")
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
             }
             .buttonStyle(.bordered)
             .help("Fit to view")
@@ -208,7 +273,13 @@ struct GridEditorView: View {
                 Image(systemName: "grid")
             }
             .toggleStyle(.button)
-            .help("Toggle grid lines")
+            .help("Toggle grid lines (G)")
+
+            Button(action: togglePlayPause) {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+            }
+            .buttonStyle(.bordered)
+            .help(isPlaying ? "Pause simulation" : "Run simulation")
 
             Spacer()
 
@@ -238,6 +309,16 @@ struct GridEditorView: View {
         .padding(.vertical, 6)
     }
 
+    private var rotationLabel: String {
+        switch patternRotation % 4 {
+        case 0: return "0°"
+        case 1: return "90°"
+        case 2: return "180°"
+        case 3: return "270°"
+        default: return ""
+        }
+    }
+
     private var gridCanvas: some View {
         GridCanvasView(
             grid: $grid,
@@ -250,15 +331,14 @@ struct GridEditorView: View {
             deadColor: deadColor,
             selectedTool: selectedTool,
             selectedPattern: selectedPattern,
+            patternRotation: patternRotation,
             hoveredCell: $hoveredCell,
             shapePreview: $shapePreview,
             onZoomChange: { displayZoom = $0 },
             onViewReady: { gridViewRef = $0 },
             onGridChanged: { newGrid in
                 grid = newGrid
-            },
-            onCellAction: { row, col, tool in
-                handleCellAction(row: row, col: col, tool: tool)
+                flushToProvider()
             },
             onShapeComplete: { r0, c0, r1, c1, tool in
                 handleShapeComplete(fromRow: r0, fromCol: c0, toRow: r1, toCol: c1, tool: tool)
@@ -281,9 +361,8 @@ struct GridEditorView: View {
 
             Spacer()
 
-            Text("Scroll to zoom  \u{2022}  Right-drag to pan  \u{2022}  Esc to close")
+            Text("Scroll to zoom  \u{2022}  Right-drag to pan  \u{2022}  Pencil(P)\u{21C3}Line(L)\u{21C3}Rect(R)\u{21C3}Eraser(E)\u{21C3}Grid(G)")
                 .font(.caption)
-                .foregroundColor(.secondary.opacity(0.6))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
@@ -332,6 +411,21 @@ struct GridEditorView: View {
         }
     }
 
+    private func togglePlayPause() {
+        if isPlaying {
+            DesktopCanvas.shared.withGoLProvider(for: canvasID) { provider in
+                provider.pause()
+            }
+            isPlaying = false
+        } else {
+            flushToProvider()
+            DesktopCanvas.shared.withGoLProvider(for: canvasID) { provider in
+                provider.resume()
+            }
+            isPlaying = true
+        }
+    }
+
     private func flushToProvider() {
         DesktopCanvas.shared.withGoLProvider(for: canvasID) { provider in
             provider.writeFullGrid(grid)
@@ -339,9 +433,30 @@ struct GridEditorView: View {
     }
 
     private func flushAndResume() {
-        DesktopCanvas.shared.withGoLProvider(for: canvasID) { provider in
-            provider.writeFullGrid(grid)
-            provider.resume()
+        let gridCopy = grid
+        let w = gridW
+        let h = gridH
+        let cID = canvasID
+        let wasPlaying = isPlaying
+
+        DesktopCanvas.shared.withGoLProvider(for: cID) { provider in
+            provider.writeFullGrid(gridCopy)
+            if !wasPlaying {
+                provider.resume()
+            }
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            var gridState: [[Bool]] = []
+            gridState.reserveCapacity(h)
+            for row in 0..<h {
+                let offset = row * w
+                let end = min(offset + w, gridCopy.count)
+                gridState.append(gridCopy[offset..<end].map { $0 != 0 })
+            }
+            DispatchQueue.main.async {
+                self.state.persistGridState(gridState, canvasID: cID)
+            }
         }
     }
 
@@ -350,7 +465,6 @@ struct GridEditorView: View {
 
         if let pattern = selectedPattern {
             placePattern(pattern, atRow: row, atCol: col)
-            selectedPattern = nil
         }
     }
 
@@ -378,7 +492,8 @@ struct GridEditorView: View {
     }
 
     private func placePattern(_ pattern: Pattern, atRow row: Int, atCol col: Int) {
-        for (dr, dc) in pattern.cells {
+        let cells = pattern.rotated(by: patternRotation)
+        for (dr, dc) in cells {
             let r = row + dr
             let c = col + dc
             if r >= 0, r < gridH, c >= 0, c < gridW {
@@ -387,7 +502,7 @@ struct GridEditorView: View {
             }
         }
         DesktopCanvas.shared.withGoLProvider(for: canvasID) { provider in
-            for (dr, dc) in pattern.cells {
+            for (dr, dc) in cells {
                 let r = row + dr
                 let c = col + dc
                 if r >= 0, r < gridH, c >= 0, c < gridW {
@@ -434,17 +549,17 @@ struct GridCanvasView: NSViewRepresentable {
     let deadColor: NSColor
     let selectedTool: DrawTool
     let selectedPattern: Pattern?
+    let patternRotation: Int
     @Binding var hoveredCell: (row: Int, col: Int)?
     @Binding var shapePreview: (r0: Int, c0: Int, r1: Int, c1: Int)?
     var onZoomChange: (CGFloat) -> Void
     var onViewReady: (GridCanvasNSView) -> Void
     var onGridChanged: ([UInt8]) -> Void
-    var onCellAction: (Int, Int, DrawTool) -> Void
+    var onCellAction: ((Int, Int, DrawTool) -> Void)?
     var onShapeComplete: (Int, Int, Int, Int, DrawTool) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
-            onCellAction: onCellAction,
             onShapeComplete: onShapeComplete,
             onGridChanged: onGridChanged
         )
@@ -461,7 +576,6 @@ struct GridCanvasView: NSViewRepresentable {
 
     func updateNSView(_ nsView: GridCanvasNSView, context: Context) {
         nsView.coordinator = context.coordinator
-        nsView.coordinator?.onCellAction = onCellAction
         nsView.coordinator?.onShapeComplete = onShapeComplete
         nsView.coordinator?.onGridChanged = onGridChanged
         nsView.onZoomChange = onZoomChange
@@ -474,18 +588,19 @@ struct GridCanvasView: NSViewRepresentable {
         nsView.deadColor = deadColor
         nsView.selectedTool = selectedTool
         nsView.selectedPattern = selectedPattern
+        nsView.patternRotation = patternRotation
         nsView.onHoverChange = { hoveredCell = $0 }
         nsView.onShapePreviewChange = { shapePreview = $0 }
         nsView.needsDisplay = true
     }
 
     final class Coordinator {
-        var onCellAction: (Int, Int, DrawTool) -> Void
+        var onCellAction: ((Int, Int, DrawTool) -> Void)?
         var onShapeComplete: (Int, Int, Int, Int, DrawTool) -> Void
         var onGridChanged: ([UInt8]) -> Void
 
         init(
-            onCellAction: @escaping (Int, Int, DrawTool) -> Void,
+            onCellAction: ((Int, Int, DrawTool) -> Void)? = nil,
             onShapeComplete: @escaping (Int, Int, Int, Int, DrawTool) -> Void,
             onGridChanged: @escaping ([UInt8]) -> Void
         ) {
@@ -497,6 +612,8 @@ struct GridCanvasView: NSViewRepresentable {
 }
 
 final class GridCanvasNSView: NSView {
+    override var isFlipped: Bool { true }
+
     var coordinator: GridCanvasView.Coordinator?
     var grid: [UInt8] = [] {
         didSet { gridGeneration &+= 1 }
@@ -509,6 +626,7 @@ final class GridCanvasNSView: NSView {
     var deadColor: NSColor = NSColor(white: 0.05, alpha: 1)
     var selectedTool: DrawTool = .pencil
     var selectedPattern: Pattern?
+    var patternRotation: Int = 0
     var onHoverChange: (((row: Int, col: Int)?) -> Void)?
     var onShapePreviewChange: (((r0: Int, c0: Int, r1: Int, c1: Int)?) -> Void)?
     var onZoomChange: ((CGFloat) -> Void)?
@@ -538,6 +656,33 @@ final class GridCanvasNSView: NSView {
         if window != nil {
             zoomLevel = initialZoom
         }
+        window?.invalidateCursorRects(for: self)
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: currentCursor())
+    }
+
+    private func currentCursor() -> NSCursor {
+        switch selectedTool {
+        case .pencil:  return .crosshair
+        case .line:    return .crosshair
+        case .rectangle: return .crosshair
+        case .eraser:  return NSCursor(image: eraserCursorImage(), hotSpot: NSPoint(x: 4, y: 4))
+        }
+    }
+
+    private func eraserCursorImage() -> NSImage {
+        let size = NSSize(width: 16, height: 16)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        NSColor.black.setStroke()
+        let rect = NSRect(x: 1, y: 1, width: 14, height: 10)
+        NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).stroke()
+        NSColor.white.setStroke()
+        NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: 14, height: 10), xRadius: 2, yRadius: 2).stroke()
+        image.unlockFocus()
+        return image
     }
 
     override func updateTrackingAreas() {
@@ -683,7 +828,7 @@ final class GridCanvasNSView: NSView {
     override func rightMouseDragged(with event: NSEvent) {
         guard isRightDragging else { return }
         panOffset.x += event.deltaX
-        panOffset.y -= event.deltaY
+        panOffset.y += event.deltaY
         needsDisplay = true
     }
 
@@ -714,6 +859,16 @@ final class GridCanvasNSView: NSView {
 
         guard isValidCell(row, col) else { return }
 
+        if let pattern = selectedPattern {
+            let cells = pattern.rotated(by: patternRotation)
+            for (dr, dc) in cells {
+                drawCell(row + dr, col + dc, alive: true)
+            }
+            coordinator?.onGridChanged(grid)
+            needsDisplay = true
+            return
+        }
+
         switch selectedTool {
         case .pencil:
             isDrawing = true
@@ -726,16 +881,12 @@ final class GridCanvasNSView: NSView {
             drawCell(row, col, alive: false)
             needsDisplay = true
         case .line, .rectangle:
-            if selectedPattern != nil {
-                coordinator?.onCellAction(row, col, selectedTool)
-            } else {
-                isDrawing = true
-                drawStartCell = (row, col)
-                let preview = (row, col, row, col)
-                lastShapePreview = preview
-                onShapePreviewChange?(preview)
-                needsDisplay = true
-            }
+            isDrawing = true
+            drawStartCell = (row, col)
+            let preview = (row, col, row, col)
+            lastShapePreview = preview
+            onShapePreviewChange?(preview)
+            needsDisplay = true
         }
     }
 
@@ -855,8 +1006,12 @@ final class GridCanvasNSView: NSView {
                 width: CGFloat(gridW) * cellDisplaySize,
                 height: CGFloat(gridH) * cellDisplaySize
             )
+            context.saveGState()
+            context.translateBy(x: gridRect.minX, y: gridRect.minY + gridRect.height)
+            context.scaleBy(x: 1, y: -1)
             context.interpolationQuality = .none
-            context.draw(image, in: gridRect)
+            context.draw(image, in: CGRect(x: 0, y: 0, width: gridRect.width, height: gridRect.height))
+            context.restoreGState()
         }
 
         if showGridLines, cellDisplaySize >= 4 {
@@ -891,6 +1046,24 @@ final class GridCanvasNSView: NSView {
             )
             NSColor.controlAccentColor.withAlphaComponent(0.3).setFill()
             context.fill(hoverRect)
+        }
+
+        if let pattern = selectedPattern,
+           let (hoverRow, hoverCol) = lastHoveredCell {
+            let cells = pattern.rotated(by: patternRotation)
+            NSColor.systemYellow.withAlphaComponent(0.4).setFill()
+            for (dr, dc) in cells {
+                let pr = hoverRow + dr
+                let pc = hoverCol + dc
+                guard isValidCell(pr, pc) else { continue }
+                let cellRect = CGRect(
+                    x: panOffset.x + CGFloat(pc) * cellDisplaySize,
+                    y: panOffset.y + CGFloat(pr) * cellDisplaySize,
+                    width: cellDisplaySize,
+                    height: cellDisplaySize
+                )
+                context.fill(cellRect)
+            }
         }
 
         if let (r0, c0, r1, c1) = lastShapePreview {
